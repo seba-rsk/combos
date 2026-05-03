@@ -14,21 +14,21 @@ COMBOS lee un reglamento de cargas desde un archivo YAML, procesa una planilla E
 ## Capturas de pantalla
 
 ### Flujo de trabajo
-![Diagrama de flujo](docs/diagrama_flujo.svg)
+![Diagrama de flujo](https://raw.githubusercontent.com/seba-rsk/combos/main/docs/diagrama_flujo.svg)
 
 ### Planilla de entrada
-![Planilla de entrada](docs/planilla_input.png)
+![Planilla de entrada](https://raw.githubusercontent.com/seba-rsk/combos/main/docs/planilla_input.png)
 
 ### Archivo de resultados - Resumen General
-![Planilla de salida - Resumen](docs/planilla_output_resumen.png)
+![Planilla de salida - Resumen](https://raw.githubusercontent.com/seba-rsk/combos/main/docs/planilla_output_resumen.png)
 
-![Planilla de salida - Resumen completo](docs/planilla_output_resumen_completo.png)
+![Planilla de salida - Resumen completo](https://raw.githubusercontent.com/seba-rsk/combos/main/docs/planilla_output_resumen_completo.png)
 
 ### Archivo de exportación a SAP2000
 
-![Planilla de salida - SAP2000](docs/planilla_output_sap2000.png)
+![Planilla de salida - SAP2000](https://raw.githubusercontent.com/seba-rsk/combos/main/docs/planilla_output_sap2000.png)
 
-![Planilla de salida - SAP2000 completo](docs/planilla_output_sap2000_completo.png)
+![Planilla de salida - SAP2000 completo](https://raw.githubusercontent.com/seba-rsk/combos/main/docs/planilla_output_sap2000_completo.png)
 
 ---
 
