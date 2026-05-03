@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+
+# Entornos
+.env
+.env.*
+*.env
+venv/
+.venv/
+
+# PyInstaller
+dist/
+build/
+*.spec.bak
+
+# Packaging
+*.egg-info/
+.eggs/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Archivos serializados
+*.pkl
+*.pickle
+
+# Archivos del usuario (plantillas completadas)
+*.xlsx
+!plantilla_ejemplo.xlsx
+
+# Logs
+*.log
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db

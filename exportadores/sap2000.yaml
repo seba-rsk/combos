@@ -1,0 +1,40 @@
+metadata:
+  software_name: "SAP2000"
+  description: "Formato de importación psra el software SAP2000"
+
+hoja:
+  tabla_combinaciones:
+    layout: "por_componente"
+    fila_inicio: 2
+    columna_inicio: 2
+
+    columnas:
+      - id: "case"
+        titulo: "Combination"
+        fuente: "nombre_combinacion"
+
+      - id: "load_name"
+        titulo: "Load_case"
+        fuente: "nombre_estado"
+
+      - id: "load_sf"
+        titulo: "Factor"
+        fuente: "factor_por_signo"
+
+  tabla_nombres:
+    titulo: "Combination"
+    separacion_columnas: 1
+
+  tabla_envolventes:
+    prefijo_nombre: "ENV"
+    separacion_columnas: 1
+
+    columnas:
+      - id: "envelope"
+        titulo: "Envelope"
+
+      - id: "combination"
+        titulo: "Combination"
+
+      - id: "factor"
+        titulo: "Factor"

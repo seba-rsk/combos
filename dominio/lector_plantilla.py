@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+
+class ErrorValidacionPlantilla(Exception):
+    def __init__(self, errores: list[str]) -> None:
+        self.errores = errores
+        super().__init__("\n".join(errores))
+
+
+def leer_plantilla(estados: list[dict], reglamento: dict) -> list[dict]:
+    estados_enriquecidos = _construir_estados_enriquecidos(estados)
+    errores = _recolectar_errores_de_validacion(estados, estados_enriquecidos, reglamento)
+    if errores:
+        raise ErrorValidacionPlantilla(errores)
+    return estados_enriquecidos
+
+
+# ── Validación ────────────────────────────────────────────────────────────────
+
+def _recolectar_errores_de_validacion(
+    estados_originales: list[dict],
+    estados_enriquecidos: list[dict],
+    reglamento: dict,
+) -> list[str]:
+    errores: list[str] = []
+    errores.extend(_errores_tipos_de_carga_desconocidos(estados_originales, reglamento))
+    errores.extend(_errores_grupos_con_menos_de_dos_estados(estados_enriquecidos))
+    errores.extend(_errores_nombres_de_estado_duplicados(estados_originales))
+    return errores
+
+
+def _errores_tipos_de_carga_desconocidos(estados: list[dict], reglamento: dict) -> list[str]:
+    tipos_definidos = set(reglamento["load_types"].keys())
+    tipos_usados = {estado["tipo_carga"] for estado in estados}
+    tipos_desconocidos = tipos_usados - tipos_definidos
+    return [
+        f"El tipo de carga '{tipo}' no está definido en el reglamento."
+        for tipo in sorted(tipos_desconocidos)
+    ]
+
+
+def _errores_grupos_con_menos_de_dos_estados(estados_enriquecidos: list[dict]) -> list[str]:
+    conteo_por_grupo = _contar_estados_enriquecidos_por_grupo(estados_enriquecidos)
+    return [
+        f"El grupo '{nombre_grupo}' tiene {cantidad} estado(s). Se requieren al menos dos."
+        for nombre_grupo, cantidad in sorted(conteo_por_grupo.items())
+        if cantidad < 2
+    ]
+
+
+def _contar_estados_enriquecidos_por_grupo(estados_enriquecidos: list[dict]) -> dict[str, int]:
+    conteo: dict[str, int] = {}
+    for estado in estados_enriquecidos:
+        if estado["tipo_estado"] != "direccional":
+            continue
+        nombre_grupo = estado["nombre_grupo"]
+        conteo[nombre_grupo] = conteo.get(nombre_grupo, 0) + 1
+    return conteo
+
+
+def _errores_nombres_de_estado_duplicados(estados: list[dict]) -> list[str]:
+    nombres_vistos: dict[str, str] = {}
+    errores: list[str] = []
+    for estado in estados:
+        nombre = estado["nombre_estado"]
+        clave_normalizada = nombre.lower()
+        if clave_normalizada in nombres_vistos:
+            errores.append(
+                f"El nombre de estado '{nombre}' está duplicado "
+                f"(ya existe como '{nombres_vistos[clave_normalizada]}')."
+            )
+        else:
+            nombres_vistos[clave_normalizada] = nombre
+    return errores
+
+
+# ── Construcción ──────────────────────────────────────────────────────────────
+
+def _construir_estados_enriquecidos(estados: list[dict]) -> list[dict]:
+    resultado: list[dict] = []
+    for estado in estados:
+        resultado.extend(_construir_variantes(estado))
+    return resultado
+
+
+def _construir_variantes(estado: dict) -> list[dict]:
+    if estado["tipo_estado"] == "simple":
+        return [_construir_variante(estado, signo=1, nombre_grupo=None)]
+
+    nombre_grupo = _construir_nombre_grupo(estado["tipo_carga"], estado["grupo"])
+    variantes = [_construir_variante(estado, signo=1, nombre_grupo=nombre_grupo)]
+
+    if estado["incluir_opuesto"]:
+        variantes.append(_construir_variante(estado, signo=-1, nombre_grupo=nombre_grupo))
+
+    return variantes
+
+
+def _construir_variante(estado: dict, signo: int, nombre_grupo: str | None) -> dict:
+    return {
+        "nombre_estado": estado["nombre_estado"],
+        "tipo_carga": estado["tipo_carga"],
+        "tipo_estado": estado["tipo_estado"],
+        "nombre_grupo": nombre_grupo,
+        "signo": signo,
+    }
+
+
+def _construir_nombre_grupo(tipo_carga: str, numero_grupo: int) -> str:
+    return f"{tipo_carga}-{numero_grupo}"

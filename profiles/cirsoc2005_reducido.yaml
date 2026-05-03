@@ -1,0 +1,139 @@
+# CIRSOC
+# Tipos de carga + Combinaciones específicas para Argentina
+
+metadata:
+  code_name: "CIRSOC"
+  code_version: "2005"
+  country: "Argentina"
+  description: "Reglamento Argentino de Cargas y Combinaciones"
+
+permanent_load_types:
+  - D
+
+# Estados límite
+limit_states:
+  ELU:    # Id del estado límite.
+    name: "Estado límite último"
+    prefix: "U"
+    
+  ELS:    # Id del estado límite.
+    name: "Estado límite de servicio"
+    prefix: "S"
+
+# Definición de tipos de carga soportados
+load_types:
+  D:      # Id del tipo de carga.    
+    name: "Cargas permanentes"
+    description: "Cargas permanentes debidas al peso de los elementos estructurales y de los elementos que actúan en forma permanente sobre la estructura, o las solicitaciones correspondientes."
+
+  L:      # Id del tipo de carga.
+    name: "Cargas vivas"
+    description: "Sobrecargas debida a la ocupación y a los equipos móviles, o las solicitaciones correspondientes."
+
+  Lr:      # Id del tipo de carga.
+    name: "Sobrecarga de cubiertas"
+    description: "Sobrecargas en las cubiertas, o las solicitaciones correspondientes."
+
+  W:      # Id del tipo de carga.
+    name: "Carga de viento"
+    description: "Carga debida al viento, o las solicitaciones correspondientes."
+
+  T:      # Id del tipo de carga.
+    name: "Efecto de temperatura"
+    description: "Solicitaciones de coacción y efectos provenientes de la contracción o expansión resultante de las variaciones de temperatura, fluencia lenta de los materiales componentes, contracción, cambios de humedad y asentamientos diferenciales o sus combinaciones."
+
+# Combinaciones de carga
+combinations:
+  ELU:
+    # U1.1 = 1.4(D+F)  
+    - id: 1
+      factors:
+        D: 1.4
+
+    - id: 2
+      # U2.1 = 1.2(D+F+T)+1.6(L+H)+0.5Lr
+      factors:
+        D: 1.2
+        T: 1.2
+        L: 1.6
+        Lr: 0.5
+
+    - id: 3
+      # U3.1 = 1.2D+1.6Lr+1.0L
+      factors:
+        D: 1.2
+        Lr: 1.6
+        L: 1.0
+
+    - id: 4
+      # U3.2 = 1.2D+1.6Lr+0.8W
+      factors:
+        D: 1.2
+        Lr: 1.6
+        W: 0.8
+
+    - id: 5
+      # U4.1 = 1.2D+1.6W+1.0L+0.5Lr
+      factors:
+        D: 1.2
+        W: 1.6
+        L: 1.0
+        Lr: 0.5
+
+    - id: 6
+      # U6.1 = 0.9D+1.6W+1.6H
+      factors:
+        D: 0.9
+        W: 1.6
+
+  ELS:
+    - id: 1
+      # S1.1 = D+F+T
+      factors:
+        D: 1.0
+        T: 1.0
+
+    - id: 2
+      # S1.2 = D+F+L+Lr+S+R+H
+      factors:
+        D: 1.0
+        L: 1.0
+        Lr: 1.0
+
+    - id: 3
+      # S1.3 = D+F+W
+      factors:
+        D: 1.0
+        W: 1.0
+
+    - id: 4
+      # S2.1 = D+F+0.7L+0.7Lr+0.7S+0.7R+0.7H+0.7W
+      factors:
+        D: 1.0
+        L: 0.7
+        Lr: 0.7
+        W: 0.7
+
+    - id: 5
+      # S2.2 = D+F+0.7W+0.7T
+      factors:
+        D: 1.0
+        W: 0.7
+        T: 0.7
+
+    - id: 6
+      # S2.3 = D+F+0.7L+0.7Lr+0.7S+0.7R+0.7H+0.7T
+      factors:
+        D: 1.0
+        L: 0.7
+        Lr: 0.7
+        T: 0.7
+
+    - id: 7
+      # S3.1 = D+F+0.6L+0.6Lr+0.6S+0.6R+0.6H+0.6W+0.6T
+      factors:
+        D: 1.0
+        L: 0.6
+        Lr: 0.6
+        W: 0.6
+        T: 0.6

@@ -1,0 +1,87 @@
+{
+  "version": "1.0",
+  "fila_inicio": 2,
+  "fila_tabla": 9,
+  "columna_inicio": 2,
+  "filas_preestablecidas": 20,
+  "encabezado": {
+    "borde": true,
+    "alto": null,
+    "color_fondo": null,
+    "color_texto": null,
+    "negrita": null,
+    "fuente": null,
+    "tamaño_fuente": null
+  },
+  "filas": {
+    "borde": true,
+    "alto": null,
+    "color_fondo_par": null,
+    "color_fondo_impar": null
+  },
+  "columnas": [
+    {
+      "id": "numero",
+      "titulo": "N°",
+      "tipo": "autonumerico",
+      "fondo_gris_fijo": false,
+      "validacion_stop": false,
+      "ancho": null,
+      "mensaje_error": null
+    },
+    {
+      "id": "nombre_estado",
+      "titulo": "Nombre del estado",
+      "tipo": "texto_libre",
+      "fondo_gris_fijo": false,
+      "validacion_stop": false,
+      "ancho": null,
+      "mensaje_error": null
+    },
+    {
+      "id": "tipo_carga",
+      "titulo": "Tipo de carga",
+      "tipo": "lista_desplegable",
+      "fuente": "yaml_load_types",
+      "fondo_gris_fijo": false,
+      "validacion_stop": true,
+      "ancho": null,
+      "mensaje_error": "El tipo de carga debe pertenecer al reglamento activo."
+    },
+    {
+      "id": "tipo_estado",
+      "titulo": "Tipo de estado",
+      "tipo": "lista_desplegable",
+      "opciones": ["Simple", "Direccional"],
+      "fondo_gris_fijo": false,
+      "validacion_stop": true,
+      "ancho": null,
+      "mensaje_error": "El tipo de estado debe ser Simple o Direccional."
+    },
+    {
+      "id": "numero_grupo",
+      "titulo": "Número de grupo",
+      "tipo": "entero_positivo",
+      "fondo_gris_fijo": true,
+      "validacion_stop": false,
+      "ancho": null,
+      "mensaje_error": null
+    },
+    {
+      "id": "incluir_opuesto",
+      "titulo": "Incluir opuesto",
+      "tipo": "lista_desplegable",
+      "opciones": ["Sí", "No"],
+      "fondo_gris_fijo": true,
+      "validacion_stop": true,
+      "ancho": null,
+      "mensaje_error": "El valor debe ser Sí o No."
+    }
+  ],
+  "imagen_empresa": null,
+  "panel_referencia": {
+    "columnas_separador": 1,
+    "titulo_permanentes": "Cargas permanentes declaradas:",
+    "titulo_tipos_de_carga": "Tipos de cargas declarados:"
+  }
+}

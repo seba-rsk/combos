@@ -1,0 +1,137 @@
+metadata:
+  # Nombre del software destino. Aparece en el nombre de la pestaña del Excel:
+  # "Output [software_name]"
+  software_name: "Ejemplo 'por_componente'"
+
+  # Descripción libre del formato. Solo informativa, no la usa COMBOS.
+  description: "Formato de importación ejemplo para el caso por_componente"
+
+
+hoja:
+
+  # ── Tabla 1: combinaciones ───────────────────────────────────────────────────
+  #
+  # Exporta las combinaciones generadas en el formato seleccionado.
+  #
+  tabla_combinaciones:
+
+    # ── Layout ────────────────────────────────────────────────────────────────
+    #
+    # Define cómo se organizan las combinaciones en la tabla.
+    # Valores posibles: "por_componente" | "por_combinacion"
+    #
+    # por_componente: una fila por cada componente de cada combinación.
+    #   Cada fila repite el nombre de la combinación junto al estado y su factor.
+    #   Ejemplo:
+    #     Case      LoadName    LoadSF
+    #     U1        DEAD         1.40
+    #     U1        LIVE         1.60
+    #     U2        DEAD         0.90
+    #     U2        LIVE         1.00
+    #
+    # por_combinacion: una fila por combinación, una columna por estado de carga.
+    #   COMBOS genera automáticamente una columna por cada estado presente.
+    #   El orden de las columnas de estados sigue el orden de la planilla del usuario.
+    #   Ejemplo:
+    #     Case      DEAD    LIVE
+    #     U1        1.40    1.60
+    #     U2        0.90    1.00
+    #
+    layout: "por_componente"
+
+    # ── Posición de la tabla en la hoja ───────────────────────────────────────
+    #
+    # Fila desde la que empieza la tabla. 1 = primera fila de la hoja.
+    fila_inicio: 2
+
+    # Columna desde la que empieza la tabla. 1 = columna A.
+    columna_inicio: 2
+
+    # ── Columnas (solo para layout "por_componente") ───────────────────────────
+    #
+    # Lista de columnas en orden. Podés agregar, quitar o reordenar columnas.
+    # Cada columna tiene tres campos:
+    #
+    #   id:     Identificador libre. No lo usa COMBOS internamente.
+    #
+    #   titulo: Texto del encabezado que aparece en la primera fila de la tabla.
+    #
+    #   fuente: Qué dato escribe COMBOS en esa columna.
+    #           ATENCIÓN: no modificar los valores posibles, son fijos:
+    #             nombre_combinacion  →  nombre final de la combinación (ej: U4-2)
+    #             nombre_estado       →  nombre del estado de carga (ej: DEAD)
+    #             factor_por_signo    →  factor × signo como un solo número (ej: -1.60)
+    #
+    columnas:
+      - id: "case"
+        titulo: "Combination"
+        fuente: "nombre_combinacion"
+
+      - id: "load_name"
+        titulo: "Load_case"
+        fuente: "nombre_estado"
+
+      - id: "load_sf"
+        titulo: "Factor"
+        fuente: "factor_por_signo"
+
+    # ── Título de combinación (solo para layout "por_combinacion") ─────────────
+    #
+    # Título de la columna que muestra el nombre de la combinación.
+    # Las columnas de estados las genera COMBOS automáticamente
+    # usando el nombre de cada estado como título.
+    #
+    # titulo_combinacion: "Case"
+
+
+  # ── Tabla 2: nombres de combinaciones ────────────────────────────────────────
+  #
+  # Lista compacta de los nombres finales de todas las combinaciones generadas.
+  # Una fila por combinación, sin factores ni estados.
+  #
+  tabla_nombres:
+
+    # Texto del encabezado de la columna.
+    titulo: "Combination"
+
+    # Columnas de separación respecto a la tabla anterior.
+    separacion_columnas: 1
+
+
+  # ── Tabla 3: envolventes ──────────────────────────────────────────────────────
+  #
+  # Genera una envolvente por estado límite, compuesta por todas las combinaciones
+  # de ese estado con factor 1. Se exporta en formato por_componente.
+  # Ejemplo con prefijo_nombre "ENV" y estado límite de prefijo "U":
+  #   Envelope    Combination     Factor
+  #   ENVU        U1              1
+  #   ENVU        U2              1
+  #   ENVU        U3-1            1
+  #   ENVU        U3-2            1
+  #
+  tabla_envolventes:
+
+    # Prefijo que se antepone al prefijo del estado límite para nombrar la envolvente.
+    # Con prefijo_nombre "ENV" y estado límite de prefijo "U" → "ENVU".
+    prefijo_nombre: "ENV"
+
+    # Columnas de separación respecto a la tabla anterior.
+    separacion_columnas: 1
+
+    # ── Columnas ───────────────────────────────────────────────────────────────
+    #
+    # Tres columnas fijas. Solo podés modificar el titulo de cada una.
+    # Los id son fijos y los usa COMBOS internamente:
+    #   envelope    →  nombre de la envolvente (ej: ENVU)
+    #   combination →  nombre de la combinación componente (ej: U1)
+    #   factor      →  siempre 1
+    #
+    columnas:
+      - id: "envelope"
+        titulo: "Envelope"
+
+      - id: "combination"
+        titulo: "Combination"
+
+      - id: "factor"
+        titulo: "Factor"
