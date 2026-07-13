@@ -1,6 +1,6 @@
 metadata:
   software_name: "SAP2000"
-  description: "Formato de importación psra el software SAP2000"
+  description: "Formato de importación para el software SAP2000"
 
 hoja:
   tabla_combinaciones:

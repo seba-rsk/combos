@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from dominio.modelos import Combinacion, FilaEnvolvente
+
 
 def construir_envolventes(
-    combinaciones_validas: list[dict],
+    combinaciones_validas: list[Combinacion],
     reglamento: dict,
     prefijo_nombre: str,
-) -> list[dict]:
+) -> list[FilaEnvolvente]:
     """
     Construye las filas de envolventes a partir de combinaciones ya nombradas.
 
@@ -16,34 +18,31 @@ def construir_envolventes(
     """
     grupos = _agrupar_combinaciones_por_estado_limite(combinaciones_validas)
 
-    filas: list[dict] = []
+    filas: list[FilaEnvolvente] = []
     for estado_limite, nombres_combinaciones in grupos.items():
-        prefijo_estado = _obtener_prefijo_estado_limite(reglamento, estado_limite)
+        prefijo_estado = _obtener_prefijo_estado_limite(
+            reglamento, estado_limite
+        )
         nombre_envolvente = f"{prefijo_nombre}{prefijo_estado}"
         for nombre_combinacion in nombres_combinaciones:
-            filas.append(_construir_fila_envolvente(nombre_envolvente, nombre_combinacion))
+            filas.append(
+                FilaEnvolvente(
+                    nombre_envolvente=nombre_envolvente,
+                    nombre_combinacion=nombre_combinacion,
+                )
+            )
     return filas
 
 
 # ── Agrupamiento ──────────────────────────────────────────────────────────────
 
 def _agrupar_combinaciones_por_estado_limite(
-    combinaciones_validas: list[dict],
+    combinaciones_validas: list[Combinacion],
 ) -> dict[str, list[str]]:
     grupos: dict[str, list[str]] = defaultdict(list)
     for combinacion in combinaciones_validas:
-        grupos[combinacion["estado_limite"]].append(combinacion["nombre"])
+        grupos[combinacion.estado_limite].append(combinacion.nombre)
     return grupos
-
-
-# ── Construcción de objetos ───────────────────────────────────────────────────
-
-def _construir_fila_envolvente(nombre_envolvente: str, nombre_combinacion: str) -> dict:
-    return {
-        "nombre_envolvente": nombre_envolvente,
-        "nombre_combinacion": nombre_combinacion,
-        "factor": 1,
-    }
 
 
 # ── Lectura del reglamento ────────────────────────────────────────────────────

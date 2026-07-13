@@ -99,7 +99,7 @@ Si tu cambio afecta el comportamiento del software:
 
 ## Estilo de código
 
-- Python 3.13+.
+- Python 3.12+.
 - Sin comentarios obvios. Solo comentar lo que no es evidente.
 - Nombres en español. Sin abreviaturas.
 - Type hints en todas las funciones públicas.

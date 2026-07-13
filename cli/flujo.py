@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import traceback
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -9,6 +11,7 @@ from tkinter import filedialog
 
 from dominio.lector_yaml import leer_reglamento
 from dominio.lector_plantilla import leer_plantilla, ErrorValidacionPlantilla
+from dominio.modelos import Combinacion, Estado, EstadoCrudo
 from dominio.generador import generar_combinaciones
 from dominio.duplicados import marcar_duplicadas
 from dominio.preponderancia import marcar_superadas
@@ -20,13 +23,21 @@ from infraestructura.lector_excel import (
     ErrorDatoFila,
 )
 from infraestructura.exportador import exportar
-from dominio.formateador import formatear_componentes
 from version import VERSION
 from infraestructura.rutas import (
     RUTA_PROFILES,
     RUTA_EXPORTADORES,
+    RUTA_LOG,
 )
 from infraestructura.config_interna import CONFIG_PLANTILLA, CONFIG_RESUMEN
+from cli.constantes import (
+    NOMBRE_CARPETA_ESCRITORIO,
+    PREFIJO_PLANTILLA,
+    PREFIJO_EXPORTACION,
+    EXTENSION_EXCEL,
+    EXTENSION_YAML,
+    FORMATO_FECHA_ARCHIVO,
+)
 from cli.consola import (
     mostrar_bienvenida,
     mostrar_separador,
@@ -42,6 +53,7 @@ from cli.consola import (
     mostrar_error_indices,
     mostrar_tabla_resumen,
     pedir_input,
+    pedir_seleccion_de_archivo,
     pedir_confirmacion,
     pedir_enter,
 )
@@ -54,13 +66,17 @@ def ejecutar_flujo() -> None:
 
     reglamento, nombre_perfil = _paso_cargar_reglamento()
 
-    _paso_generar_plantilla_si_el_usuario_lo_desea(reglamento, nombre_perfil, nombre_perfil)
+    _paso_generar_plantilla_si_el_usuario_lo_desea(
+        reglamento, nombre_perfil, nombre_perfil
+    )
 
     estados_crudos = _paso_leer_excel_del_usuario(reglamento)
 
     estados_enriquecidos = _paso_validar_plantilla(estados_crudos, reglamento)
 
-    combinaciones = _paso_generar_combinaciones(estados_enriquecidos, reglamento)
+    combinaciones = _paso_generar_combinaciones(
+        estados_enriquecidos, reglamento
+    )
 
     combinaciones = _paso_marcar_duplicadas(combinaciones)
 
@@ -70,7 +86,16 @@ def ejecutar_flujo() -> None:
 
     _paso_mostrar_resumen(combinaciones)
 
-    _paso_exportar(combinaciones, estados_crudos, estados_enriquecidos, reglamento, nombre_perfil)
+    if not _hay_combinaciones_validas(combinaciones):
+        if not _confirmar_continuar_sin_combinaciones():
+            mostrar_info("Operación finalizada sin exportar.")
+            pedir_enter("Presioná Enter para cerrar COMBOS...")
+            return
+
+    _paso_exportar(
+        combinaciones, estados_crudos, estados_enriquecidos,
+        reglamento, nombre_perfil,
+    )
 
 
 # ── Paso 2 ────────────────────────────────────────────────────────────────────
@@ -79,7 +104,7 @@ def _paso_cargar_reglamento() -> tuple[dict, str]:
     mostrar_separador("Reglamento")
     ruta_yaml = _pedir_archivo_de_directorio(
         directorio=RUTA_PROFILES,
-        extension=".yaml",
+        extension=EXTENSION_YAML,
         descripcion_tipo="reglamento",
         seccion="Reglamento",
     )
@@ -96,7 +121,9 @@ def _paso_cargar_reglamento() -> tuple[dict, str]:
 
 # ── Paso 3 ────────────────────────────────────────────────────────────────────
 
-def _paso_generar_plantilla_si_el_usuario_lo_desea(reglamento: dict, nombre_yaml: str, nombre_perfil: str) -> None:
+def _paso_generar_plantilla_si_el_usuario_lo_desea(
+    reglamento: dict, nombre_yaml: str, nombre_perfil: str
+) -> None:
     mostrar_separador("Plantilla")
     respuesta = pedir_confirmacion("¿Desea generar la plantilla Excel ahora?")
     if not respuesta:
@@ -114,30 +141,36 @@ def _paso_generar_plantilla_si_el_usuario_lo_desea(reglamento: dict, nombre_yaml
 
 def _pedir_ruta_destino_plantilla(nombre_yaml: str) -> Path:
     nombre_sin_extension = Path(nombre_yaml).stem
-    ruta_escritorio = Path.home() / "Desktop"
-    ruta_por_defecto = ruta_escritorio / f"Input_COMBOS_{nombre_sin_extension}.xlsx"
+    ruta_escritorio = Path.home() / NOMBRE_CARPETA_ESCRITORIO
+    fecha = datetime.now().strftime(FORMATO_FECHA_ARCHIVO)
+    nombre_archivo = (
+        f"{PREFIJO_PLANTILLA}{nombre_sin_extension}_{fecha}{EXTENSION_EXCEL}"
+    )
+    ruta_por_defecto = ruta_escritorio / nombre_archivo
 
     ruta = _pedir_ruta_con_dialogo(
         titulo="Guardar plantilla de estados de carga",
         modo="guardar",
-        tipos_archivo=[("Excel", "*.xlsx")],
+        tipos_archivo=[("Excel", f"*{EXTENSION_EXCEL}")],
         ruta_por_defecto=ruta_por_defecto,
     )
     if ruta is not None:
         return ruta
 
-    entrada = pedir_input(f"Ruta de destino para la plantilla [Enter = {ruta_por_defecto}]:").strip()
+    entrada = pedir_input(
+        f"Ruta de destino para la plantilla [Enter = {ruta_por_defecto}]:"
+    ).strip()
     if not entrada:
         return ruta_por_defecto
     ruta = Path(entrada)
-    if ruta.suffix.lower() != ".xlsx":
-        ruta = ruta.with_suffix(".xlsx")
+    if ruta.suffix.lower() != EXTENSION_EXCEL:
+        ruta = ruta.with_suffix(EXTENSION_EXCEL)
     return ruta
 
 
 # ── Paso 4-5 ──────────────────────────────────────────────────────────────────
 
-def _paso_leer_excel_del_usuario(reglamento: dict) -> list[dict]:
+def _paso_leer_excel_del_usuario(reglamento: dict) -> list[EstadoCrudo]:
     mostrar_separador("Datos de entrada")
     config_plantilla = _leer_config_plantilla()
     ruta_excel = _pedir_ruta_excel_completado()
@@ -145,7 +178,13 @@ def _paso_leer_excel_del_usuario(reglamento: dict) -> list[dict]:
     mostrar_procesando(f"Leyendo archivo: {ruta_excel} ...")
     try:
         estados = leer_excel(str(ruta_excel), config_plantilla)
-    except (ErrorArchivoExcel, ErrorFormatoPlantilla, ErrorDatoFila) as error:
+    except ErrorArchivoExcel as error:
+        _loguear_error_tecnico(
+            f"apertura de la planilla Excel '{ruta_excel}'",
+            error.__cause__ or error,
+        )
+        _terminar_con_error(str(error))
+    except (ErrorFormatoPlantilla, ErrorDatoFila) as error:
         _terminar_con_error(str(error))
 
     mostrar_exito(f"Se leyeron {len(estados)} estado(s) de carga.")
@@ -157,14 +196,18 @@ def _leer_config_plantilla() -> dict:
 
 
 def _pedir_ruta_excel_completado() -> Path:
-    pedir_enter("Presione Enter para abrir el explorador de archivos y seleccionar la planilla completada:")
-    ruta_por_defecto = Path.home() / "Desktop"
+    pedir_enter(
+        "Presione Enter para abrir el explorador de archivos y "
+        "seleccionar la planilla completada:"
+    )
+    ruta_por_defecto = Path.home() / NOMBRE_CARPETA_ESCRITORIO
 
+    nombre_archivo_ejemplo = f"estados_de_carga{EXTENSION_EXCEL}"
     ruta = _pedir_ruta_con_dialogo(
         titulo="Seleccionar archivo Excel completado",
         modo="abrir",
-        tipos_archivo=[("Excel", "*.xlsx")],
-        ruta_por_defecto=ruta_por_defecto / "estados_de_carga.xlsx",
+        tipos_archivo=[("Excel", f"*{EXTENSION_EXCEL}")],
+        ruta_por_defecto=ruta_por_defecto / nombre_archivo_ejemplo,
     )
     if ruta is not None:
         return ruta
@@ -183,7 +226,9 @@ def _pedir_ruta_excel_completado() -> Path:
 
 # ── Paso 6 ────────────────────────────────────────────────────────────────────
 
-def _paso_validar_plantilla(estados_crudos: list[dict], reglamento: dict) -> list[dict]:
+def _paso_validar_plantilla(
+    estados_crudos: list[EstadoCrudo], reglamento: dict
+) -> list[Estado]:
     try:
         estados_enriquecidos = leer_plantilla(estados_crudos, reglamento)
     except ErrorValidacionPlantilla as error:
@@ -195,7 +240,9 @@ def _paso_validar_plantilla(estados_crudos: list[dict], reglamento: dict) -> lis
 
 # ── Paso 7 ────────────────────────────────────────────────────────────────────
 
-def _paso_generar_combinaciones(estados: list[dict], reglamento: dict) -> list[dict]:
+def _paso_generar_combinaciones(
+    estados: list[Estado], reglamento: dict
+) -> list[Combinacion]:
     mostrar_separador("Procesamiento")
     combinaciones = generar_combinaciones(estados, reglamento)
     mostrar_info(f"Combinaciones generadas: [bold]{len(combinaciones)}[/bold]")
@@ -204,9 +251,11 @@ def _paso_generar_combinaciones(estados: list[dict], reglamento: dict) -> list[d
 
 # ── Paso 8 ────────────────────────────────────────────────────────────────────
 
-def _paso_marcar_duplicadas(combinaciones: list[dict]) -> list[dict]:
+def _paso_marcar_duplicadas(
+    combinaciones: list[Combinacion],
+) -> list[Combinacion]:
     combinaciones = marcar_duplicadas(combinaciones)
-    cantidad_duplicadas = sum(1 for c in combinaciones if c["es_duplicada"])
+    cantidad_duplicadas = sum(1 for c in combinaciones if c.es_duplicada)
     if cantidad_duplicadas == 0:
         mostrar_info("Duplicados encontrados: ninguno.")
     else:
@@ -219,9 +268,13 @@ def _paso_marcar_duplicadas(combinaciones: list[dict]) -> list[dict]:
 
 # ── Paso 9 ────────────────────────────────────────────────────────────────────
 
-def _paso_marcar_superadas(combinaciones: list[dict], reglamento: dict) -> list[dict]:
-    combinaciones = marcar_superadas(combinaciones, reglamento["permanent_load_types"])
-    superadas = [c for c in combinaciones if c["esta_superada"]]
+def _paso_marcar_superadas(
+    combinaciones: list[Combinacion], reglamento: dict
+) -> list[Combinacion]:
+    combinaciones = marcar_superadas(
+        combinaciones, reglamento["permanent_load_types"]
+    )
+    superadas = [c for c in combinaciones if c.esta_superada]
 
     if not superadas:
         mostrar_info("Combinaciones superadas por preponderancia: ninguna.")
@@ -231,24 +284,36 @@ def _paso_marcar_superadas(combinaciones: list[dict], reglamento: dict) -> list[
 
 # ── Paso 10 ───────────────────────────────────────────────────────────────────
 
-def _paso_resolver_combinaciones_superadas(combinaciones: list[dict]) -> None:
-    superadas = [c for c in combinaciones if c["esta_superada"]]
+def _paso_resolver_combinaciones_superadas(
+    combinaciones: list[Combinacion],
+) -> None:
+    superadas = [c for c in combinaciones if c.esta_superada]
     if not superadas:
         return
 
     mostrar_separador("Combinaciones superadas")
-    indice_por_generacion = {c["indice_generacion"]: c for c in combinaciones}
+    indice_por_generacion = {c.indice_generacion: c for c in combinaciones}
     mostrar_tabla_superadas(superadas, indice_por_generacion)
-    indices_a_descartar = _pedir_indices_a_descartar(superadas)
+
+    while True:
+        indices_a_descartar = _pedir_indices_a_descartar(superadas)
+        if not indices_a_descartar or _confirmar_descarte(indices_a_descartar):
+            break
 
     for combinacion in superadas:
-        combinacion["descartada_por_usuario"] = (
-            combinacion["indice_generacion"] in indices_a_descartar
+        combinacion.descartada_por_usuario = (
+            combinacion.indice_generacion in indices_a_descartar
         )
 
 
-def _pedir_indices_a_descartar(superadas: list[dict]) -> set[int]:
-    indices_validos = {c["indice_generacion"] for c in superadas}
+def _confirmar_descarte(indices_a_descartar: set[int]) -> bool:
+    lista = ", ".join(f"#{i}" for i in sorted(indices_a_descartar))
+    mostrar_info(f"Se van a descartar: {lista}")
+    return pedir_confirmacion("¿Confirma este descarte?")
+
+
+def _pedir_indices_a_descartar(superadas: list[Combinacion]) -> set[int]:
+    indices_validos = {c.indice_generacion for c in superadas}
     mostrar_ayuda_descartar()
 
     while True:
@@ -267,7 +332,9 @@ def _pedir_indices_a_descartar(superadas: list[dict]) -> set[int]:
         return indices
 
 
-def _parsear_indices(entrada: str, indices_validos: set[int]) -> tuple[set[int], str | None]:
+def _parsear_indices(
+    entrada: str, indices_validos: set[int]
+) -> tuple[set[int], str | None]:
     partes = entrada.split("-")
     indices = set()
     for parte in partes:
@@ -276,22 +343,38 @@ def _parsear_indices(entrada: str, indices_validos: set[int]) -> tuple[set[int],
             return set(), f"'{parte}' no es un número válido."
         numero = int(parte)
         if numero not in indices_validos:
-            return set(), f"#{numero} no está en la lista de combinaciones superadas."
+            return set(), (
+                f"#{numero} no está en la lista de combinaciones superadas."
+            )
         indices.add(numero)
     return indices, None
 
 
-def _paso_mostrar_resumen(combinaciones: list[dict]) -> None:
+def _paso_mostrar_resumen(combinaciones: list[Combinacion]) -> None:
     mostrar_separador("Resumen")
     mostrar_tabla_resumen(combinaciones)
+
+
+def _hay_combinaciones_validas(combinaciones: list[Combinacion]) -> bool:
+    return any(
+        not c.es_duplicada and not c.descartada_por_usuario
+        for c in combinaciones
+    )
+
+
+def _confirmar_continuar_sin_combinaciones() -> bool:
+    mostrar_advertencia(
+        "No quedó ninguna combinación resultante para exportar."
+    )
+    return pedir_confirmacion("¿Desea elegir un exportador igualmente?")
 
 
 # ── Paso 11 ───────────────────────────────────────────────────────────────────
 
 def _paso_exportar(
-    combinaciones: list[dict],
-    estados_crudos: list[dict],
-    estados: list[dict],
+    combinaciones: list[Combinacion],
+    estados_crudos: list[EstadoCrudo],
+    estados: list[Estado],
     reglamento: dict,
     nombre_perfil: str,
 ) -> None:
@@ -300,7 +383,7 @@ def _paso_exportar(
 
     ruta_exportador = _pedir_archivo_de_directorio(
         directorio=RUTA_EXPORTADORES,
-        extension=".yaml",
+        extension=EXTENSION_YAML,
         descripcion_tipo="exportador",
     )
     config_exportador = _leer_config_exportador(ruta_exportador)
@@ -319,7 +402,7 @@ def _paso_exportar(
 
     cantidad_validas = sum(
         1 for c in combinaciones
-        if not c["es_duplicada"] and not c["descartada_por_usuario"]
+        if not c.es_duplicada and not c.descartada_por_usuario
     )
     mostrar_exito(f"{cantidad_validas} combinación(es) exportada(s).")
     mostrar_exito(f"Archivo generado: {ruta_destino}")
@@ -334,18 +417,31 @@ def _leer_config_exportador(ruta_yaml: Path) -> dict:
     try:
         return yaml.safe_load(ruta_yaml.read_text(encoding="utf-8"))
     except yaml.YAMLError as error:
-        _terminar_con_error(f"Error al leer el perfil de exportación '{ruta_yaml.name}': {error}")
+        _loguear_error_tecnico(
+            f"lectura del perfil de exportación '{ruta_yaml.name}'",
+            error,
+        )
+        _terminar_con_error(
+            f"El perfil de exportación '{ruta_yaml.name}' tiene un "
+            f"formato inválido. Revisá el YAML o pedí una versión "
+            f"corregida a quien te lo compartió."
+        )
 
 
 def _pedir_ruta_destino_exportacion(ruta_exportador: Path) -> Path:
     nombre_software = ruta_exportador.stem
-    nombre_archivo_por_defecto = f"Output_COMBOS_{nombre_software}.xlsx"
-    ruta_por_defecto = Path.home() / "Desktop" / nombre_archivo_por_defecto
+    fecha = datetime.now().strftime(FORMATO_FECHA_ARCHIVO)
+    nombre_archivo_por_defecto = (
+        f"{PREFIJO_EXPORTACION}{nombre_software}_{fecha}{EXTENSION_EXCEL}"
+    )
+    ruta_por_defecto = (
+        Path.home() / NOMBRE_CARPETA_ESCRITORIO / nombre_archivo_por_defecto
+    )
 
     ruta_dialogo = _pedir_ruta_con_dialogo(
         titulo="Guardar archivo de exportación",
         modo="guardar",
-        tipos_archivo=[("Excel", "*.xlsx")],
+        tipos_archivo=[("Excel", f"*{EXTENSION_EXCEL}")],
         ruta_por_defecto=ruta_por_defecto,
     )
 
@@ -357,15 +453,16 @@ def _pedir_ruta_destino_exportacion(ruta_exportador: Path) -> Path:
             ruta_dialogo = None
         else:
             entrada = pedir_input(
-                f"Ruta de destino para el archivo de exportación [Enter = {ruta_por_defecto}]:"
+                "Ruta de destino para el archivo de exportación "
+                f"[Enter = {ruta_por_defecto}]:"
             ).strip()
             viene_del_dialogo = False
             if not entrada:
                 ruta = ruta_por_defecto
             else:
                 ruta = Path(entrada)
-                if ruta.suffix.lower() != ".xlsx":
-                    ruta = ruta.with_suffix(".xlsx")
+                if ruta.suffix.lower() != EXTENSION_EXCEL:
+                    ruta = ruta.with_suffix(EXTENSION_EXCEL)
 
         if ruta.exists():
             if _archivo_esta_abierto(ruta):
@@ -406,9 +503,9 @@ def _pedir_archivo_de_directorio(
         mostrar_lista_archivos(archivos, descripcion_tipo)
 
     while True:
-        entrada = pedir_input(
+        entrada = pedir_seleccion_de_archivo(
             f"Elija un {descripcion_tipo} (1-{len(archivos)}):",
-            al_activar=reimprimir if seccion else None,
+            al_reimprimir=reimprimir if seccion else None,
         ).strip()
         if not entrada.isdigit():
             mostrar_advertencia(f"Ingrese un número entre 1 y {len(archivos)}.")
@@ -461,4 +558,40 @@ def _pedir_ruta_con_dialogo(
         raiz.destroy()
         return Path(ruta) if ruta else None
     except Exception:
+        _loguear_fallo_dialogo()
         return None
+
+
+def _loguear_fallo_dialogo() -> None:
+    """
+    Registra en el log de errores que el diálogo gráfico de selección de
+    archivo falló. El flujo continúa pidiendo la ruta por teclado; este
+    registro solo evita que el fallo quede oculto sin rastro.
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(RUTA_LOG, "a", encoding="utf-8") as f:
+        f.write(f"\n{'=' * 60}\n")
+        f.write(
+            f"  COMBOS v{VERSION}  —  {timestamp}  —  falló el diálogo de "
+            "selección de archivo, se pidió la ruta por teclado\n"
+        )
+        f.write(f"{'=' * 60}\n")
+        f.write(traceback.format_exc())
+
+
+def _loguear_error_tecnico(contexto: str, error: BaseException) -> None:
+    """
+    Registra en el log de errores el detalle técnico de una excepción que
+    se le presentó al usuario con un mensaje amable. Permite que el
+    reporte de soporte tenga la información técnica sin ensuciar la
+    pantalla del usuario final.
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(RUTA_LOG, "a", encoding="utf-8") as f:
+        f.write(f"\n{'=' * 60}\n")
+        f.write(
+            f"  COMBOS v{VERSION}  —  {timestamp}  —  error técnico "
+            f"durante {contexto}\n"
+        )
+        f.write(f"{'=' * 60}\n")
+        f.write(f"  {type(error).__name__}: {error}\n")

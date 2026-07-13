@@ -2,7 +2,13 @@ import yaml
 from pathlib import Path
 
 
-SECCIONES_OBLIGATORIAS = {"metadata", "limit_states", "load_types", "combinations", "permanent_load_types"}
+SECCIONES_OBLIGATORIAS = {
+    "metadata",
+    "limit_states",
+    "load_types",
+    "combinations",
+    "permanent_load_types",
+}
 
 
 def leer_reglamento(ruta_yaml: str) -> dict:
@@ -19,15 +25,21 @@ def leer_reglamento(ruta_yaml: str) -> dict:
     _validar_secciones_obligatorias(datos)
     tipos_de_carga_definidos = set(datos["load_types"].keys())
     _validar_combinaciones(datos["combinations"], tipos_de_carga_definidos)
-    _validar_tipos_permanentes(datos["permanent_load_types"], tipos_de_carga_definidos)
-    _validar_tipos_permanentes_en_combinaciones(datos["combinations"], datos["permanent_load_types"])
+    _validar_tipos_permanentes(
+        datos["permanent_load_types"], tipos_de_carga_definidos
+    )
+    _validar_tipos_permanentes_en_combinaciones(
+        datos["combinations"], datos["permanent_load_types"]
+    )
     return _construir_reglamento(datos)
 
 
 def _leer_archivo(ruta_yaml: str) -> str:
     ruta = Path(ruta_yaml)
     if not ruta.exists():
-        raise FileNotFoundError(f"No se encontró el archivo de reglamento: '{ruta_yaml}'")
+        raise FileNotFoundError(
+            f"No se encontró el archivo de reglamento: '{ruta_yaml}'"
+        )
     return ruta.read_text(encoding="utf-8")
 
 
@@ -35,7 +47,10 @@ def _parsear_yaml(contenido: str, ruta_yaml: str) -> dict:
     try:
         return yaml.safe_load(contenido)
     except yaml.YAMLError as error:
-        raise ValueError(f"El archivo '{ruta_yaml}' contiene YAML con sintaxis inválida: {error}")
+        raise ValueError(
+            f"El archivo '{ruta_yaml}' contiene YAML con sintaxis "
+            f"inválida: {error}"
+        )
 
 
 def _validar_secciones_obligatorias(datos: dict) -> None:
@@ -43,7 +58,8 @@ def _validar_secciones_obligatorias(datos: dict) -> None:
     secciones_faltantes = SECCIONES_OBLIGATORIAS - secciones_presentes
     if secciones_faltantes:
         raise ValueError(
-            f"El reglamento está incompleto. Secciones faltantes: {sorted(secciones_faltantes)}"
+            f"El reglamento está incompleto. "
+            f"Secciones faltantes: {sorted(secciones_faltantes)}"
         )
 
 
@@ -55,24 +71,28 @@ def _validar_combinaciones(combinations: dict, tipos_definidos: set) -> None:
             tipos_desconocidos = tipos_en_combinacion - tipos_definidos
             if tipos_desconocidos:
                 errores.append(
-                    f"Combinación {combinacion['id']} del estado '{id_estado_limite}' "
-                    f"referencia tipos de carga no definidos en load_types: {sorted(tipos_desconocidos)}"
+                    f"Combinación {combinacion['id']} del estado "
+                    f"'{id_estado_limite}' referencia tipos de carga no "
+                    f"definidos en load_types: {sorted(tipos_desconocidos)}"
                 )
             _validar_factores_en_combinacion(combinacion, id_estado_limite)
     if errores:
         raise ValueError(
-            f"Se encontraron {len(errores)} error(es) en las combinaciones:\n" +
-            "\n".join(f"  • {e}" for e in errores)
+            f"Se encontraron {len(errores)} error(es) en las combinaciones:\n"
+            + "\n".join(f"  • {e}" for e in errores)
         )
 
 
-def _validar_factores_en_combinacion(combinacion: dict, id_estado_limite: str) -> None:
+def _validar_factores_en_combinacion(
+    combinacion: dict, id_estado_limite: str
+) -> None:
     for tipo_carga, factor in combinacion["factors"].items():
         if factor <= 0:
             raise ValueError(
-                f"Combinación {combinacion['id']} del estado '{id_estado_limite}': "
-                f"el factor del tipo de carga '{tipo_carga}' es {factor}. "
-                f"Los factores de ponderación deben ser mayores que cero."
+                f"Combinación {combinacion['id']} del estado "
+                f"'{id_estado_limite}': el factor del tipo de carga "
+                f"'{tipo_carga}' es {factor}. Los factores de ponderación "
+                f"deben ser mayores que cero."
             )
 
 
@@ -84,15 +104,19 @@ def _validar_tipos_permanentes(
             "La clave 'permanent_load_types' está vacía. "
             "Debe definir al menos un tipo de carga permanente."
         )
-    tipos_duplicados = [t for t in tipos_permanentes if tipos_permanentes.count(t) > 1]
+    tipos_duplicados = [
+        t for t in tipos_permanentes if tipos_permanentes.count(t) > 1
+    ]
     if tipos_duplicados:
         raise ValueError(
-            f"La clave 'permanent_load_types' contiene tipos duplicados: {sorted(set(tipos_duplicados))}"
+            f"La clave 'permanent_load_types' contiene tipos duplicados: "
+            f"{sorted(set(tipos_duplicados))}"
         )
     tipos_invalidos = [t for t in tipos_permanentes if t not in tipos_definidos]
     if tipos_invalidos:
         raise ValueError(
-            f"'permanent_load_types' referencia tipos no definidos en load_types: {sorted(tipos_invalidos)}"
+            f"'permanent_load_types' referencia tipos no definidos en "
+            f"load_types: {sorted(tipos_invalidos)}"
         )
 
 
@@ -106,14 +130,15 @@ def _validar_tipos_permanentes_en_combinaciones(
             tipos_en_combinacion = set(combinacion["factors"].keys())
             if not tipos_en_combinacion & tipos_permanentes_set:
                 errores.append(
-                    f"Combinación {combinacion['id']} del estado '{id_estado_limite}' "
-                    f"no contiene ningún tipo de carga permanente "
-                    f"(se requiere al menos uno de: {sorted(tipos_permanentes_set)})"
+                    f"Combinación {combinacion['id']} del estado "
+                    f"'{id_estado_limite}' no contiene ningún tipo de carga "
+                    f"permanente (se requiere al menos uno de: "
+                    f"{sorted(tipos_permanentes_set)})"
                 )
     if errores:
         raise ValueError(
-            f"Se encontraron {len(errores)} error(es) de carga permanente:\n" +
-            "\n".join(f"  • {e}" for e in errores)
+            f"Se encontraron {len(errores)} error(es) de carga permanente:\n"
+            + "\n".join(f"  • {e}" for e in errores)
         )
 
 

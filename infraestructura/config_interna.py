@@ -1,23 +1,13 @@
 CONFIG_PLANTILLA = {
-    "version": "1.0",
     "fila_inicio": 2,
     "fila_tabla": 9,
     "columna_inicio": 2,
     "filas_preestablecidas": 20,
     "encabezado": {
         "borde": True,
-        "alto": None,
-        "color_fondo": None,
-        "color_texto": None,
-        "negrita": None,
-        "fuente": None,
-        "tamaño_fuente": None,
     },
     "filas": {
         "borde": True,
-        "alto": None,
-        "color_fondo_par": None,
-        "color_fondo_impar": None,
     },
     "columnas": [
         {
@@ -26,7 +16,6 @@ CONFIG_PLANTILLA = {
             "tipo": "autonumerico",
             "fondo_gris_fijo": False,
             "validacion_stop": False,
-            "ancho": None,
             "mensaje_error": None,
         },
         {
@@ -35,7 +24,6 @@ CONFIG_PLANTILLA = {
             "tipo": "texto_libre",
             "fondo_gris_fijo": False,
             "validacion_stop": False,
-            "ancho": None,
             "mensaje_error": None,
         },
         {
@@ -45,8 +33,9 @@ CONFIG_PLANTILLA = {
             "fuente": "yaml_load_types",
             "fondo_gris_fijo": False,
             "validacion_stop": True,
-            "ancho": None,
-            "mensaje_error": "El tipo de carga debe pertenecer al reglamento activo.",
+            "mensaje_error": (
+                "El tipo de carga debe pertenecer al reglamento activo."
+            ),
         },
         {
             "id": "tipo_estado",
@@ -55,7 +44,6 @@ CONFIG_PLANTILLA = {
             "opciones": ["Simple", "Direccional"],
             "fondo_gris_fijo": False,
             "validacion_stop": True,
-            "ancho": None,
             "mensaje_error": "El tipo de estado debe ser Simple o Direccional.",
         },
         {
@@ -64,7 +52,6 @@ CONFIG_PLANTILLA = {
             "tipo": "entero_positivo",
             "fondo_gris_fijo": True,
             "validacion_stop": False,
-            "ancho": None,
             "mensaje_error": None,
         },
         {
@@ -74,11 +61,9 @@ CONFIG_PLANTILLA = {
             "opciones": ["Sí", "No"],
             "fondo_gris_fijo": True,
             "validacion_stop": True,
-            "ancho": None,
             "mensaje_error": "El valor debe ser Sí o No.",
         },
     ],
-    "imagen_empresa": None,
     "panel_referencia": {
         "columnas_separador": 1,
         "titulo_permanentes": "Cargas permanentes declaradas:",
@@ -92,31 +77,22 @@ CONFIG_RESUMEN = {
     "nombre_hoja": "Resumen COMBOS",
     "encabezado_programa": {
         "nombre": "COMBOS",
-        "version_combos": "1.0",
         "mostrar_reglamento": True,
         "mostrar_fecha": True,
-        "logo": None,
-    },
-    "estilos": {
-        "encabezado_seccion": {
-            "color_fondo": None,
-            "color_texto": None,
-            "negrita": None,
-            "fuente": None,
-            "tamaño_fuente": None,
-            "borde": None,
-        },
-        "columnas_tabla": {
-            "ancho_auto": True,
-            "anchos": None,
-        },
-        "filas": {
-            "color_fondo_par": None,
-            "color_fondo_impar": None,
-            "borde": None,
-        },
     },
     "secciones": [
+        {
+            "id": "resumen_ejecutivo",
+            "titulo": "RESUMEN EJECUTIVO",
+            "visible": True,
+            "columnas": [
+                "Estado límite",
+                "Generadas",
+                "Duplicadas",
+                "Superadas (descartadas)",
+                "Resultantes",
+            ],
+        },
         {
             "id": "datos_ingresados",
             "titulo": "DATOS DE ENTRADA",

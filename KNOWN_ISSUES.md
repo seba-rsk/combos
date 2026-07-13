@@ -4,31 +4,6 @@ Este archivo documenta limitaciones conocidas del software en su versión actual
 
 ---
 
-## Tests unitarios de la lógica de dominio no implementados
-
-**Versión afectada:** 1.0.0
-**Planificado para:** v2
-
-### Descripción
-
-La lógica de dominio del software — generación de combinaciones, detección de duplicados y análisis de preponderancia — no cuenta con tests unitarios automatizados en v1.0.0. La verificación del comportamiento se realizó manualmente durante el desarrollo.
-
-La ausencia de tests implica que cambios futuros en los módulos de dominio no tienen una red de seguridad automatizada que detecte regresiones.
-
-### Módulos afectados
-
-- `dominio/lector_yaml.py`
-- `dominio/lector_plantilla.py`
-- `dominio/generador.py`
-- `dominio/duplicados.py`
-- `dominio/preponderancia.py`
-
-### Planificado para v2
-
-Implementación de tests unitarios con `pytest` para los cinco módulos de dominio, cubriendo tanto casos válidos como casos borde y condiciones de error.
-
----
-
 ## Sistema de log limitado al flujo principal
 
 **Versión afectada:** 1.0.0
@@ -130,10 +105,8 @@ Definí un tipo de carga permanente virtual (por ejemplo, `D0`) en `load_types` 
 
 ### Descripción
 
-El archivo `config/resumen.json` incluye una sección `estilos` con campos para personalizar el aspecto visual del Excel de salida: colores de fondo, bordes, anchos de columna y fuentes. En v1.0.0 todos esos campos están fijados en `null` y el código no los procesa. Modificarlos no produce ningún efecto.
-
-El formato visual del archivo de salida está definido internamente en `infraestructura/estilos_excel.py` y no es configurable por el usuario en esta versión.
+El formato visual del archivo de salida (colores de fondo, bordes, anchos de columna y fuentes) está definido internamente en `infraestructura/estilos_excel.py` y no es configurable por el usuario en esta versión.
 
 ### Recomendación para el usuario
 
-No modifiques la sección `estilos` de `config/resumen.json` en esta versión. Los cambios no tendrán efecto y el campo está reservado para v2.
+No hay ningún archivo de configuración para personalizar los estilos en esta versión. Esa posibilidad está reservada para v2.

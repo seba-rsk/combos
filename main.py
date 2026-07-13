@@ -17,11 +17,14 @@ def main() -> None:
 
     except KeyboardInterrupt:
         from rich.console import Console
-        Console().print("\n\n  [dim]Operación cancelada por el usuario.[/dim]\n")
+        Console().print(
+            "\n\n  [dim]Operación cancelada por el usuario.[/dim]\n"
+        )
         sys.exit(0)
 
     except SystemExit:
-        # sys.exit() lanzado por _terminar_con_error en flujo.py — dejar pasar.
+        # sys.exit() lanzado por _terminar_con_error en flujo.py —
+        # dejar pasar.
         raise
 
     except Exception:

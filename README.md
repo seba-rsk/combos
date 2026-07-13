@@ -4,7 +4,7 @@
 
 ![Versión](https://img.shields.io/badge/versión-1.0.0-blue)
 ![Licencia](https://img.shields.io/badge/licencia-MIT-green)
-![Python](https://img.shields.io/badge/Python-3.13+-yellow)
+![Python](https://img.shields.io/badge/Python-3.12+-yellow)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-lightgrey)
 
 COMBOS lee un reglamento de cargas desde un archivo YAML, procesa una planilla Excel completada por el usuario con sus estados de carga, y exporta las combinaciones válidas en el formato que SAP2000 — u otro software de cálculo — puede importar directamente.
@@ -56,7 +56,7 @@ COMBOS lee un reglamento de cargas desde un archivo YAML, procesa una planilla E
 
 Para correr desde el código fuente:
 
-- Python 3.13 o superior.
+- Python 3.12 o superior.
 - Dependencias listadas en `pyproject.toml`.
 
 ---
@@ -262,7 +262,7 @@ El nombre del grupo se construye como `tipo_carga-número` (ej: `W-1`). Si el us
 
 ### Combinaciones de carga
 
-Un reglamento de cargas establece fórmulas del tipo `1.2D + 1.6L + 0.5S`, donde cada letra representa un tipo de carga y el número que la acompaña es su factor de ponderación. COMBOS toma esas fórmulas y las expande automáticamente con los estados de carga reales del proyecto, generando todas las combinaciones posibles. Cuando un tipo de carga del reglamento no tiene estados definidos en la planilla, las combinaciones que lo incluyen no se generan.
+Un reglamento de cargas establece fórmulas del tipo `1.2D + 1.6L + 0.5S`, donde cada letra representa un tipo de carga y el número que la acompaña es su factor de ponderación. COMBOS toma esas fórmulas y las expande automáticamente con los estados de carga reales del proyecto, generando todas las combinaciones posibles. Cuando **ninguno** de los tipos de carga que requiere una combinación tiene estados definidos en la planilla, esa combinación no se genera. Cuando **algunos sí y otros no**, la combinación se genera igual, pero con menos términos de los previstos por el reglamento — ver [KNOWN_ISSUES.md](KNOWN_ISSUES.md) para el detalle y sus implicancias.
 
 ### Preponderancia
 
@@ -298,7 +298,8 @@ combos/
 ├── combos.ico                    # Icono para versión portable.
 ├── cli/
 │   ├── consola.py                # Funciones de presentación en pantalla
-│   └── flujo.py                  # Orquestador del flujo completo
+│   ├── flujo.py                  # Orquestador del flujo completo
+│   └── constantes.py             # Constantes de la interfaz (rutas, extensiones, prefijos)
 ├── dominio/
 │   ├── generador.py              # Generación de combinaciones de carga
 │   ├── duplicados.py             # Detección y marcado de combinaciones duplicadas
@@ -308,15 +309,15 @@ combos/
 │   ├── lector_yaml.py            # Lectura y validación de reglamentos YAML
 │   └── lector_plantilla.py       # Validación de los estados de carga ingresados por el usuario
 ├── infraestructura/
-│   ├── config_interna.py         # Configuración interna embebida (reemplaza config/*.json en runtime)
+│   ├── config_interna.py         # Configuración interna embebida de plantilla y resumen
 │   ├── estilos_excel.py          # Estilos visuales aplicados a los archivos Excel generados
+│   ├── sanitizacion_excel.py     # Neutralización de texto libre antes de escribirlo en Excel
 │   ├── exportador.py             # Generación del archivo Excel de salida
 │   ├── generador_plantilla.py    # Generación de la planilla Excel en blanco para el usuario
 │   ├── lector_excel.py           # Lectura de la planilla Excel completada por el usuario
 │   └── rutas.py                  # Resolución de rutas del sistema de archivos (desarrollo y portable)
-├── config/                       # Solo en desarrollo
-│   ├── plantilla.json            # Configuración de columnas y formato de la planilla de entrada
-│   └── resumen.json              # Configuración de secciones y formato de la hoja resumen del output
+├── tests/                        # Tests unitarios (pytest) de la lógica de dominio
+│   └── dominio/
 ├── docs/                         # Documentación general para readme.txt
 │   ├── diagrama_flujo.svg
 │   ├── planilla_input.png
@@ -327,7 +328,7 @@ combos/
 ├── profiles/
 │   ├── ejemplo_reglamento.yaml   # Plantilla comentada para crear un reglamento nuevo
 │   ├── cirsoc2005.yaml           # Reglamento CIRSOC-2005 (Argentina)
-│   └── cirsoc2005_reduido.yaml   # Reglamento CIRSOC-2005 (Argentina) con tipos de cargas más usados
+│   └── cirsoc2005_reducido.yaml  # Reglamento CIRSOC-2005 (Argentina) con tipos de cargas más usados
 ├── exportadores/
 │   ├── por_combinacion.yaml      # Ejemplo de exportador con layout "una fila por combinación"
 │   ├── por_componente.yaml       # Ejemplo de exportador con layout "una fila por componente"

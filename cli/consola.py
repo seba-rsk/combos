@@ -12,6 +12,8 @@ from rich import box
 import time
 
 from dominio.formateador import formatear_componentes
+from dominio.modelos import Combinacion
+from cli.constantes import FILAS_POR_PAGINA
 
 
 console = Console()
@@ -25,9 +27,16 @@ def mostrar_bienvenida(version: str) -> None:
         Text.assemble(
             ("COMBOS", "bold white"),
             (f"  v{version}", "dim white"),
-            ("\nGenerador de combinaciones de carga estructural para ingeniería civil", "dim white"),
+            (
+                "\nGenerador de combinaciones de carga estructural "
+                "para ingeniería civil",
+                "dim white",
+            ),
             ("\n\n\nRepo: ", "dim white"),
-            ("github.com/seba-rsk/combos", "dim cyan link https://github.com/seba-rsk/combos"),
+            (
+                "github.com/seba-rsk/combos",
+                "dim cyan link https://github.com/seba-rsk/combos",
+            ),
         ),
         box=box.ROUNDED,
         border_style="grey50",
@@ -78,7 +87,10 @@ def mostrar_lista_archivos(archivos: list[Path], descripcion_tipo: str) -> None:
 
 def mostrar_errores_validacion(errores: list[str]) -> None:
     console.print()
-    console.print(f"  [bold red]Se encontraron {len(errores)} error(es) en la plantilla:[/bold red]")
+    console.print(
+        f"  [bold red]Se encontraron {len(errores)} error(es) "
+        "en la plantilla:[/bold red]"
+    )
     for error in errores:
         console.print(f"    [red]•[/red]  {error}")
     console.print()
@@ -87,8 +99,8 @@ def mostrar_errores_validacion(errores: list[str]) -> None:
 # ── Tabla de combinaciones superadas ─────────────────────────────────────────
 
 def mostrar_tabla_superadas(
-    superadas: list[dict],
-    indice_por_generacion: dict[int, dict],
+    superadas: list[Combinacion],
+    indice_por_generacion: dict[int, Combinacion],
 ) -> None:
     console.print()
     console.print(
@@ -96,9 +108,9 @@ def mostrar_tabla_superadas(
         f"[yellow]{len(superadas)}[/yellow]"
     )
 
-    por_estado_limite: dict[str, list[dict]] = {}
+    por_estado_limite: dict[str, list[Combinacion]] = {}
     for combinacion in superadas:
-        estado = combinacion["estado_limite"]
+        estado = combinacion.estado_limite
         if estado not in por_estado_limite:
             por_estado_limite[estado] = []
         por_estado_limite[estado].append(combinacion)
@@ -107,17 +119,19 @@ def mostrar_tabla_superadas(
         console.print()
         console.print(f"  [grey50]{estado_limite} {'─' * 60}[/grey50]")
 
-        por_dominante: dict[int, list[dict]] = {}
+        por_dominante: dict[int, list[Combinacion]] = {}
         for combinacion in grupo:
-            dominante_id = combinacion["superada_por"]
+            dominante_id = combinacion.superada_por
             if dominante_id not in por_dominante:
                 por_dominante[dominante_id] = []
             por_dominante[dominante_id].append(combinacion)
 
+        filas_mostradas = 0
         for dominante_id, superadas_por_esta in sorted(por_dominante.items()):
             dominante = indice_por_generacion.get(dominante_id)
             componentes_dominante = (
-                formatear_componentes(dominante["componentes"]) if dominante else "?"
+                formatear_componentes(dominante.componentes)
+                if dominante else "?"
             )
 
             tabla = Table(
@@ -135,14 +149,18 @@ def mostrar_tabla_superadas(
             )
 
             for combinacion in superadas_por_esta:
-                indice = combinacion["indice_generacion"]
-                componentes = formatear_componentes(combinacion["componentes"])
+                indice = combinacion.indice_generacion
+                componentes = formatear_componentes(combinacion.componentes)
                 tabla.add_row(
                     Text(f"  #{indice}", style="yellow"),
                     Text(componentes),
                 )
 
             console.print(tabla)
+            filas_mostradas += 1 + len(superadas_por_esta)
+            if filas_mostradas >= FILAS_POR_PAGINA:
+                pedir_enter("Presione Enter para ver más...")
+                filas_mostradas = 0
 
 
 # ── Ayuda para input de descarte ──────────────────────────────────────────────
@@ -162,17 +180,28 @@ def mostrar_error_indices(mensaje: str) -> None:
 
 # ── Prompt de input ───────────────────────────────────────────────────────────
 
-def pedir_input(pregunta: str, al_activar=None) -> str:
+def pedir_input(pregunta: str) -> str:
+    return console.input(f"  [bold]{pregunta}[/bold] ")
+
+
+def pedir_seleccion_de_archivo(pregunta: str, al_reimprimir=None) -> str:
+    """
+    Como pedir_input, pero además vuelve a pedir la selección si el
+    usuario escribió la frase de activación de un mensaje oculto (ver
+    _chequear_activacion), reimprimiendo antes la lista de archivos.
+    """
     while True:
-        respuesta = console.input(f"  [bold]{pregunta}[/bold] ")
-        if al_activar is not None and _chequear_activacion(respuesta):
-            al_activar()
+        respuesta = pedir_input(pregunta)
+        if al_reimprimir is not None and _chequear_activacion(respuesta):
+            al_reimprimir()
             continue
         return respuesta
 
 
 def pedir_confirmacion(pregunta: str) -> bool:
-    respuesta = console.input(f"  [bold]{pregunta}[/bold] [dim]\\[s/N][/dim]: ").strip().lower()
+    respuesta = console.input(
+        f"  [bold]{pregunta}[/bold] [dim]\\[s/N][/dim]: "
+    ).strip().lower()
     return respuesta in ("s", "sí", "si")
 
 
@@ -180,10 +209,10 @@ def pedir_enter(mensaje: str) -> None:
     console.input(f"  [dim]{mensaje}[/dim] ")
 
 
-def mostrar_tabla_resumen(combinaciones: list[dict]) -> None:
+def mostrar_tabla_resumen(combinaciones: list[Combinacion]) -> None:
     validas = [
-    c for c in combinaciones
-    if not c["es_duplicada"] and not c["descartada_por_usuario"]
+        c for c in combinaciones
+        if not c.es_duplicada and not c.descartada_por_usuario
     ]
 
     console.print()
@@ -192,9 +221,9 @@ def mostrar_tabla_resumen(combinaciones: list[dict]) -> None:
         f"[green]{len(validas)}[/green]"
     )
 
-    por_estado_limite: dict[str, list[dict]] = {}
+    por_estado_limite: dict[str, list[Combinacion]] = {}
     for combinacion in validas:
-        estado = combinacion["estado_limite"]
+        estado = combinacion.estado_limite
         if estado not in por_estado_limite:
             por_estado_limite[estado] = []
         por_estado_limite[estado].append(combinacion)
@@ -203,23 +232,30 @@ def mostrar_tabla_resumen(combinaciones: list[dict]) -> None:
         console.print()
         console.print(f"  [grey50]{estado_limite} {'─' * 60}[/grey50]")
 
-        tabla = Table(
-            box=box.SIMPLE,
-            show_header=False,
-            padding=(0, 1),
-            show_edge=False,
-        )
-        tabla.add_column(no_wrap=True)
-        tabla.add_column(style="white")
+        for inicio in range(0, len(grupo), FILAS_POR_PAGINA):
+            pagina = grupo[inicio:inicio + FILAS_POR_PAGINA]
 
-        for combinacion in grupo:
-            componentes = formatear_componentes(combinacion["componentes"])
-            tabla.add_row(
-                Text(f"#{combinacion['indice_generacion']}", style="yellow"),
-                componentes,
+            tabla = Table(
+                box=box.SIMPLE,
+                show_header=False,
+                padding=(0, 1),
+                show_edge=False,
             )
+            tabla.add_column(no_wrap=True)
+            tabla.add_column(style="white")
 
-        console.print(tabla)
+            for combinacion in pagina:
+                componentes = formatear_componentes(combinacion.componentes)
+                indice = combinacion.indice_generacion
+                tabla.add_row(
+                    Text(f"#{indice}", style="yellow"),
+                    componentes,
+                )
+
+            console.print(tabla)
+
+            if inicio + FILAS_POR_PAGINA < len(grupo):
+                pedir_enter("Presione Enter para ver más...")
 
     console.print()
     pedir_enter("Presione Enter para continuar con la exportación:")

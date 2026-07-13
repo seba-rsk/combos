@@ -1,26 +1,26 @@
-from datetime import datetime
-
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.styles.protection import Protection
 from openpyxl.worksheet.datavalidation import DataValidation
 from infraestructura.estilos_excel import (
-    aplicar_estilo_etiqueta_hoja,
-    aplicar_estilo_titulo_programa,
     aplicar_estilo_label_metadata,
-    aplicar_estilo_valor_metadata,
     aplicar_estilo_encabezado_tabla,
     ajustar_anchos_columnas,
     aplicar_estilo_celda_gris,
     aplicar_borde_perimetral_tabla,
 )
 from infraestructura.config_interna import CONFIG_PLANTILLA
+from infraestructura.sanitizacion_excel import neutralizar_texto_libre
+from infraestructura.guardado_excel import guardar_excel_atomico
+from infraestructura.encabezado_excel import escribir_encabezado_programa
 
 NOMBRE_HOJA = "Estados de carga"
 
 
-def generar_plantilla(reglamento: dict, ruta_destino: str, nombre_perfil: str, version: str) -> None:
+def generar_plantilla(
+    reglamento: dict, ruta_destino: str, nombre_perfil: str, version: str
+) -> None:
     """
     Genera el archivo Excel de plantilla para que el usuario complete
     sus estados de carga, basándose en el reglamento y la configuración
@@ -29,11 +29,15 @@ def generar_plantilla(reglamento: dict, ruta_destino: str, nombre_perfil: str, v
     Raises:
         PermissionError / OSError: Si la ruta de destino no es escribible.
     """
-    libro = _construir_libro_excel(CONFIG_PLANTILLA, reglamento, nombre_perfil, version)
+    libro = _construir_libro_excel(
+        CONFIG_PLANTILLA, reglamento, nombre_perfil, version
+    )
     _guardar_archivo(libro, ruta_destino)
 
 
-def _construir_libro_excel(configuracion: dict, reglamento: dict, nombre_perfil: str, version: str) -> Workbook:
+def _construir_libro_excel(
+    configuracion: dict, reglamento: dict, nombre_perfil: str, version: str
+) -> Workbook:
     libro = Workbook()
     hoja = libro.active
     hoja.title = NOMBRE_HOJA
@@ -45,27 +49,45 @@ def _construir_libro_excel(configuracion: dict, reglamento: dict, nombre_perfil:
     columnas = configuracion["columnas"]
     fila_inicio_datos = fila_tabla + 1
 
-    _escribir_encabezado_programa(
-        hoja, fila_inicio, columna_inicio, reglamento, nombre_perfil, version
+    escribir_encabezado_programa(
+        hoja, fila_inicio, columna_inicio, reglamento, nombre_perfil, version,
+        etiqueta="ENTRADA DE DATOS",
     )
     _escribir_encabezado(hoja, columnas, fila_tabla, columna_inicio)
-    _escribir_panel_referencia(hoja, fila_tabla, columna_inicio, columnas, reglamento, configuracion["panel_referencia"])
+    _escribir_panel_referencia(
+        hoja,
+        fila_tabla,
+        columna_inicio,
+        columnas,
+        reglamento,
+        configuracion["panel_referencia"],
+    )
 
     if configuracion["encabezado"]["borde"]:
-        _aplicar_borde_rango(hoja, fila_tabla, fila_tabla, columna_inicio, columna_inicio + len(columnas) - 1)
+        _aplicar_borde_rango(
+            hoja, fila_tabla, fila_tabla, columna_inicio,
+            columna_inicio + len(columnas) - 1,
+        )
 
-    _preparar_celdas_desbloqueadas(hoja, fila_tabla, fila_inicio_datos, filas_datos, columna_inicio, columnas)
+    _preparar_celdas_desbloqueadas(
+        hoja, fila_tabla, fila_inicio_datos, filas_datos,
+        columna_inicio, columnas,
+    )
 
-    for numero_fila in range(fila_inicio_datos, fila_inicio_datos + filas_datos):
+    fila_fin_datos = fila_inicio_datos + filas_datos
+    for numero_fila in range(fila_inicio_datos, fila_fin_datos):
         if configuracion["filas"]["borde"]:
-            _aplicar_borde_rango(hoja, numero_fila, numero_fila, columna_inicio, columna_inicio + len(columnas) - 1)
+            _aplicar_borde_rango(
+                hoja, numero_fila, numero_fila, columna_inicio,
+                columna_inicio + len(columnas) - 1,
+            )
 
     for indice_columna, columna in enumerate(columnas):
         col_excel = columna_inicio + indice_columna
         _configurar_columna(
             hoja, columna, col_excel, fila_inicio_datos, filas_datos, reglamento
         )
-    
+
     aplicar_borde_perimetral_tabla(
         hoja,
         fila_tabla,
@@ -73,56 +95,11 @@ def _construir_libro_excel(configuracion: dict, reglamento: dict, nombre_perfil:
         columna_inicio,
         columna_inicio + len(columnas) - 1,
     )
-    
+
     ajustar_anchos_columnas(hoja, columna_inicio)
     _proteger_hoja(hoja)
 
     return libro
-
-
-def _escribir_encabezado_programa(
-    hoja,
-    fila: int,
-    columna: int,
-    reglamento: dict,
-    nombre_perfil: str,
-    version: str,
-) -> None:
-    metadata = reglamento.get("metadata", {})
-
-    celda_titulo = hoja.cell(row=fila, column=columna, value=f"COMBOS v{version}")
-    aplicar_estilo_titulo_programa(celda_titulo)
-    ancho_requerido = round(len(celda_titulo.value) * 1.4) + 2
-    hoja.column_dimensions[get_column_letter(columna)].width = ancho_requerido
-
-    columna_etiqueta = columna + 1
-    celda_etiqueta = hoja.cell(row=fila, column=columna_etiqueta, value="ENTRADA DE DATOS")
-    aplicar_estilo_etiqueta_hoja(celda_etiqueta)
-    fila += 1
-
-    aplicar_estilo_label_metadata(hoja.cell(row=fila, column=columna, value="Perfil usado:"))
-    aplicar_estilo_valor_metadata(hoja.cell(row=fila, column=columna + 1, value=nombre_perfil))
-    fila += 1
-
-    code_name = metadata.get("code_name", "")
-    code_version = metadata.get("code_version", "")
-    valor_reglamento = f"{code_name} - {code_version}" if code_name or code_version else ""
-    aplicar_estilo_label_metadata(hoja.cell(row=fila, column=columna, value="Reglamento:"))
-    aplicar_estilo_valor_metadata(hoja.cell(row=fila, column=columna + 1, value=valor_reglamento))
-    fila += 1
-
-    aplicar_estilo_label_metadata(hoja.cell(row=fila, column=columna, value="País:"))
-    aplicar_estilo_valor_metadata(hoja.cell(row=fila, column=columna + 1, value=metadata.get("country", "")))
-    fila += 1
-
-    aplicar_estilo_label_metadata(hoja.cell(row=fila, column=columna, value="Descripción:"))
-    aplicar_estilo_valor_metadata(hoja.cell(row=fila, column=columna + 1, value=metadata.get("description", "")))
-    fila += 1
-
-    aplicar_estilo_label_metadata(hoja.cell(row=fila, column=columna, value="Fecha:"))
-    aplicar_estilo_valor_metadata(
-        hoja.cell(row=fila, column=columna + 1, value=datetime.now().strftime("%d/%m/%Y %H:%M"))
-    )
 
 
 def _escribir_encabezado(
@@ -148,9 +125,12 @@ def _preparar_celdas_desbloqueadas(
     solo bloquee las celdas autonuméricas, que se re-bloquean luego.
     """
     proteccion_desbloqueada = Protection(locked=False)
-    for numero_fila in range(fila_inicio_datos, fila_inicio_datos + filas_datos):
+    fila_fin_datos = fila_inicio_datos + filas_datos
+    for numero_fila in range(fila_inicio_datos, fila_fin_datos):
         for indice_columna in range(len(columnas)):
-            celda = hoja.cell(row=numero_fila, column=columna_inicio + indice_columna)
+            celda = hoja.cell(
+                row=numero_fila, column=columna_inicio + indice_columna
+            )
             celda.protection = proteccion_desbloqueada
 
 
@@ -167,9 +147,13 @@ def _configurar_columna(
     if tipo == "autonumerico":
         _escribir_autonumerico(hoja, col_excel, fila_inicio_datos, filas_datos)
     elif tipo == "lista_desplegable":
-        _aplicar_validacion_lista(hoja, columna, col_excel, fila_inicio_datos, filas_datos, reglamento)
+        _aplicar_validacion_lista(
+            hoja, columna, col_excel, fila_inicio_datos, filas_datos, reglamento
+        )
     elif tipo == "entero_positivo":
-        _aplicar_validacion_entero_positivo(hoja, columna, col_excel, fila_inicio_datos, filas_datos)
+        _aplicar_validacion_entero_positivo(
+            hoja, columna, col_excel, fila_inicio_datos, filas_datos
+        )
 
     if columna.get("fondo_gris_fijo"):
         _aplicar_fondo_gris(hoja, col_excel, fila_inicio_datos, filas_datos)
@@ -181,7 +165,8 @@ def _escribir_autonumerico(
     proteccion_bloqueada = Protection(locked=True)
     estilo_alineacion = Alignment(horizontal="center")
 
-    for numero_fila in range(fila_inicio_datos, fila_inicio_datos + filas_datos):
+    fila_fin_datos = fila_inicio_datos + filas_datos
+    for numero_fila in range(fila_inicio_datos, fila_fin_datos):
         numero_secuencial = numero_fila - fila_inicio_datos + 1
         celda = hoja.cell(row=numero_fila, column=col_excel)
         celda.value = numero_secuencial
@@ -212,7 +197,9 @@ def _aplicar_validacion_lista(
     )
     hoja.add_data_validation(validacion)
 
-    rango = _construir_referencia_rango_columna(col_excel, fila_inicio_datos, filas_datos)
+    rango = _construir_referencia_rango_columna(
+        col_excel, fila_inicio_datos, filas_datos
+    )
     validacion.sqref = rango
 
 
@@ -229,7 +216,9 @@ def _aplicar_validacion_entero_positivo(
     fila_inicio_datos: int,
     filas_datos: int,
 ) -> None:
-    mensaje_error = columna.get("mensaje_error") or "Ingrese un número entero positivo."
+    mensaje_error = (
+        columna.get("mensaje_error") or "Ingrese un número entero positivo."
+    )
 
     validacion = DataValidation(
         type="whole",
@@ -242,14 +231,17 @@ def _aplicar_validacion_entero_positivo(
     )
     hoja.add_data_validation(validacion)
 
-    rango = _construir_referencia_rango_columna(col_excel, fila_inicio_datos, filas_datos)
+    rango = _construir_referencia_rango_columna(
+        col_excel, fila_inicio_datos, filas_datos
+    )
     validacion.sqref = rango
 
 
 def _aplicar_fondo_gris(
     hoja, col_excel: int, fila_inicio_datos: int, filas_datos: int
 ) -> None:
-    for numero_fila in range(fila_inicio_datos, fila_inicio_datos + filas_datos):
+    fila_fin_datos = fila_inicio_datos + filas_datos
+    for numero_fila in range(fila_inicio_datos, fila_fin_datos):
         aplicar_estilo_celda_gris(hoja.cell(row=numero_fila, column=col_excel))
 
 
@@ -291,37 +283,53 @@ def _escribir_panel_referencia(
     reglamento: dict,
     configuracion_panel: dict,
 ) -> None:
-    columna_panel = columna_inicio + len(columnas) + configuracion_panel["columnas_separador"]
+    separador = configuracion_panel["columnas_separador"]
+    columna_panel = columna_inicio + len(columnas) + separador
     fila_actual = fila_encabezado
 
     celda_titulo_permanentes = hoja.cell(
-        row=fila_actual, column=columna_panel, value=configuracion_panel["titulo_permanentes"]
+        row=fila_actual,
+        column=columna_panel,
+        value=configuracion_panel["titulo_permanentes"],
     )
     aplicar_estilo_encabezado_tabla(celda_titulo_permanentes)
     fila_actual += 1
 
     for nombre_tipo in reglamento["permanent_load_types"]:
-        aplicar_estilo_label_metadata(hoja.cell(row=fila_actual, column=columna_panel, value=nombre_tipo))
+        aplicar_estilo_label_metadata(
+            hoja.cell(
+                row=fila_actual,
+                column=columna_panel,
+                value=neutralizar_texto_libre(nombre_tipo),
+            )
+        )
         fila_actual += 1
 
     fila_actual += 1
 
     celda_titulo_tipos = hoja.cell(
-        row=fila_actual, column=columna_panel, value=configuracion_panel["titulo_tipos_de_carga"]
+        row=fila_actual,
+        column=columna_panel,
+        value=configuracion_panel["titulo_tipos_de_carga"],
     )
     aplicar_estilo_encabezado_tabla(celda_titulo_tipos)
     fila_actual += 1
 
     for id_tipo, datos_tipo in reglamento["load_types"].items():
-        aplicar_estilo_label_metadata(hoja.cell(row=fila_actual, column=columna_panel, value=f"{id_tipo} - {datos_tipo['name']}"))
+        etiqueta = f"{id_tipo} - {datos_tipo['name']}"
+        aplicar_estilo_label_metadata(
+            hoja.cell(
+                row=fila_actual,
+                column=columna_panel,
+                value=neutralizar_texto_libre(etiqueta),
+            )
+        )
         fila_actual += 1
 
 
 def _guardar_archivo(libro: Workbook, ruta_destino: str) -> None:
-    from pathlib import Path
-    ruta = Path(ruta_destino)
     try:
-        libro.save(ruta)
+        guardar_excel_atomico(libro, ruta_destino)
     except (PermissionError, OSError) as error:
         raise type(error)(
             f"No se pudo guardar la plantilla en '{ruta_destino}': {error}"

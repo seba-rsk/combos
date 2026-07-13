@@ -43,3 +43,7 @@ htmlcov/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Skills
+.claude/
+CLAUDE.md

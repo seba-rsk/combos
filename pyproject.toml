@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=72"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "combos"
@@ -11,11 +11,16 @@ license = { file = "LICENSE" }
 authors = [
     { name = "Sebastián A. Roskopf", email = "sebastianroskopf@gmail.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "openpyxl>=3.1.0",
     "pyyaml>=6.0.0",
     "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
 ]
 
 [project.urls]
@@ -30,3 +35,9 @@ where = ["."]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: depende de archivos reales del repo, no de red ni servicios externos.",
+]

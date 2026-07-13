@@ -1,35 +1,33 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 
 import openpyxl
-from openpyxl.utils import get_column_letter
 
 from dominio.envolventes import construir_envolventes
 from dominio.formateador import formatear_componentes
+from dominio.modelos import Combinacion, Componente, EstadoCrudo
 from infraestructura.estilos_excel import (
-    aplicar_estilo_titulo_programa,
-    aplicar_estilo_label_metadata,
-    aplicar_estilo_valor_metadata,
     aplicar_estilo_titulo_seccion,
     aplicar_estilo_encabezado_tabla,
     aplicar_estilo_fila_dato,
     aplicar_estilo_fila_dato_acento,
     aplicar_estilo_mensaje_vacio,
     ajustar_anchos_columnas,
-    aplicar_estilo_etiqueta_hoja,
     aplicar_borde_perimetral_tabla,
 )
+from infraestructura.sanitizacion_excel import neutralizar_texto_libre
+from infraestructura.guardado_excel import guardar_excel_atomico
+from infraestructura.encabezado_excel import escribir_encabezado_programa
 
 
 # ── Punto de entrada ──────────────────────────────────────────────────────────
 
 def exportar(
-    combinaciones: list[dict],
-    estados_crudos: list[dict],
-    estados: list[dict],
+    combinaciones: list[Combinacion],
+    estados_crudos: list[EstadoCrudo],
+    estados: list,
     reglamento: dict,
     config_resumen: dict,
     config_exportador: dict,
@@ -37,6 +35,32 @@ def exportar(
     nombre_perfil: str,
     version: str,
 ) -> None:
+    """
+    Genera el archivo Excel de salida con la hoja de resumen del proceso
+    completo y la hoja de exportación en el formato configurado.
+
+    Args:
+        combinaciones: Combinaciones ya marcadas como duplicadas y
+            superadas, con la decisión del usuario ya aplicada.
+        estados_crudos: Estados de carga tal como fueron leídos de la
+            planilla del usuario, para la sección "Datos de entrada".
+        estados: Estados enriquecidos (con variantes de signo), sin uso
+            directo en esta función más que como referencia futura.
+        reglamento: Reglamento ya validado.
+        config_resumen: Configuración de secciones y formato de la hoja
+            de resumen (ver infraestructura.config_interna.CONFIG_RESUMEN).
+        config_exportador: Configuración del perfil de exportación elegido
+            (YAML de la carpeta exportadores/).
+        ruta_destino: Ruta donde se guarda el archivo Excel generado.
+        nombre_perfil: Nombre del archivo de reglamento usado, para
+            mostrarlo en el encabezado del Excel.
+        version: Versión de COMBOS, para mostrarla en el encabezado.
+
+    Raises:
+        ValueError: Si config_resumen o config_exportador no tienen los
+            campos obligatorios, o si la ruta de destino no es válida.
+        RuntimeError: Si el archivo no se pudo guardar en la ruta indicada.
+    """
     _validar_config_resumen(config_resumen)
     _validar_config_exportador(config_exportador)
     _validar_ruta_destino(ruta_destino)
@@ -50,12 +74,14 @@ def exportar(
         libro, combinaciones, estados_crudos, reglamento,
         config_resumen, nombre_perfil, version,
     )
-    _escribir_hoja_exportacion(libro, combinaciones, config_exportador, reglamento)
+    _escribir_hoja_exportacion(
+        libro, combinaciones, config_exportador, reglamento
+    )
 
     if libro.worksheets:
         libro.active = 0
     try:
-        libro.save(ruta_destino)
+        guardar_excel_atomico(libro, ruta_destino)
     except (OSError, PermissionError) as error:
         raise RuntimeError(
             f"No se pudo guardar el archivo en '{ruta_destino}': {error}"
@@ -64,33 +90,39 @@ def exportar(
 
 # ── Paso 1: asignación de nombres ─────────────────────────────────────────────
 
-def _asignar_nombres(combinaciones: list[dict], reglamento: dict) -> None:
+def _asignar_nombres(
+    combinaciones: list[Combinacion], reglamento: dict
+) -> None:
     combinaciones_validas = [
         c for c in combinaciones
-        if not c["es_duplicada"] and not c["descartada_por_usuario"]
+        if not c.es_duplicada and not c.descartada_por_usuario
     ]
 
-    por_estado_limite: dict[str, list[dict]] = defaultdict(list)
+    por_estado_limite: dict[str, list[Combinacion]] = defaultdict(list)
     for combinacion in combinaciones_validas:
-        por_estado_limite[combinacion["estado_limite"]].append(combinacion)
+        por_estado_limite[combinacion.estado_limite].append(combinacion)
 
     for estado_limite, grupo in por_estado_limite.items():
         prefijo = _obtener_prefijo(reglamento, estado_limite)
         _asignar_nombres_en_grupo(grupo, prefijo)
 
 
-def _asignar_nombres_en_grupo(grupo: list[dict], prefijo: str) -> None:
-    por_base: dict[int, list[dict]] = defaultdict(list)
+def _asignar_nombres_en_grupo(
+    grupo: list[Combinacion], prefijo: str
+) -> None:
+    por_base: dict[int, list[Combinacion]] = defaultdict(list)
     for combinacion in grupo:
-        por_base[combinacion["combinacion_base_id"]].append(combinacion)
+        por_base[combinacion.combinacion_base_id].append(combinacion)
 
     numero_secuencial = 1
     for variantes in por_base.values():
         if len(variantes) == 1:
-            variantes[0]["nombre"] = f"{prefijo}{numero_secuencial}"
+            variantes[0].nombre = f"{prefijo}{numero_secuencial}"
         else:
             for indice_variante, variante in enumerate(variantes, start=1):
-                variante["nombre"] = f"{prefijo}{numero_secuencial}-{indice_variante}"
+                variante.nombre = (
+                    f"{prefijo}{numero_secuencial}-{indice_variante}"
+                )
         numero_secuencial += 1
 
 
@@ -105,8 +137,8 @@ def _obtener_prefijo(reglamento: dict, estado_limite: str) -> str:
 
 def _escribir_hoja_resumen(
     libro: openpyxl.Workbook,
-    combinaciones: list[dict],
-    estados_crudos: list[dict],
+    combinaciones: list[Combinacion],
+    estados_crudos: list[EstadoCrudo],
     reglamento: dict,
     config_resumen: dict,
     nombre_perfil: str,
@@ -116,14 +148,23 @@ def _escribir_hoja_resumen(
     fila = config_resumen["fila_inicio"]
     columna = config_resumen["columna_inicio"]
 
-    fila = _escribir_encabezado_programa(
-        hoja, fila, columna, config_resumen, reglamento, nombre_perfil, version,
+    encabezado = config_resumen.get("encabezado_programa", {})
+    fila = escribir_encabezado_programa(
+        hoja, fila, columna, reglamento, nombre_perfil, version,
+        etiqueta="SALIDA DE DATOS",
+        nombre_programa=encabezado.get("nombre", "COMBOS"),
+        mostrar_reglamento=encabezado.get("mostrar_reglamento", False),
+        mostrar_fecha=encabezado.get("mostrar_fecha", False),
     )
+    fila += 1
 
     escritores_por_id = {
+        "resumen_ejecutivo": _escribir_seccion_resumen_ejecutivo,
         "datos_ingresados": _escribir_seccion_datos_ingresados,
         "combinaciones_generadas": _escribir_seccion_combinaciones_generadas,
-        "combinaciones_resultantes": _escribir_seccion_combinaciones_resultantes,
+        "combinaciones_resultantes": (
+            _escribir_seccion_combinaciones_resultantes
+        ),
         "duplicados_eliminados": _escribir_seccion_duplicados_eliminados,
         "superadas": _escribir_seccion_superadas,
     }
@@ -134,70 +175,27 @@ def _escribir_hoja_resumen(
         escritor = escritores_por_id.get(config_seccion["id"])
         if escritor is None:
             continue
-        fila = escritor(hoja, fila, columna, combinaciones, estados_crudos, config_seccion)
+        fila = escritor(
+            hoja, fila, columna, combinaciones, estados_crudos, config_seccion
+        )
         fila += 1
 
     ajustar_anchos_columnas(hoja, columna)
 
 
-def _escribir_encabezado_programa(
-    hoja,
-    fila: int,
-    columna: int,
-    config_resumen: dict,
-    reglamento: dict,
-    nombre_perfil: str,
-    version: str,
-) -> int:
-    encabezado = config_resumen.get("encabezado_programa", {})
-    metadata = reglamento.get("metadata", {})
-
-    nombre = encabezado.get("nombre", "COMBOS")
-    # La version se escribe desde el parametro explícito, no desde el config JSON.
-    celda = hoja.cell(row=fila, column=columna, value=f"{nombre} v{version}")
-    aplicar_estilo_titulo_programa(celda)
-    ancho_requerido = round(len(celda.value) * 1.4) + 2
-    hoja.column_dimensions[get_column_letter(columna)].width = ancho_requerido
-
-    columna_etiqueta = columna + 1
-    celda_etiqueta = hoja.cell(row=fila, column=columna_etiqueta, value="SALIDA DE DATOS")
-    aplicar_estilo_etiqueta_hoja(celda_etiqueta)
-    fila += 1
-
-    celda_label = hoja.cell(row=fila, column=columna, value="Perfil usado:")
-    aplicar_estilo_label_metadata(celda_label)
-    celda_valor = hoja.cell(row=fila, column=columna + 1, value=nombre_perfil)
-    aplicar_estilo_valor_metadata(celda_valor)
-    fila += 1
-
-    if encabezado.get("mostrar_reglamento"):
-        code_name = metadata.get("code_name", "")
-        code_version = metadata.get("code_version", "")
-        valor = f"{code_name} - {code_version}" if code_name or code_version else ""
-        aplicar_estilo_label_metadata(hoja.cell(row=fila, column=columna, value="Reglamento:"))
-        aplicar_estilo_valor_metadata(hoja.cell(row=fila, column=columna + 1, value=valor))
-        fila += 1
-
-        aplicar_estilo_label_metadata(hoja.cell(row=fila, column=columna, value="País:"))
-        aplicar_estilo_valor_metadata(hoja.cell(row=fila, column=columna + 1, value=metadata.get("country", "")))
-        fila += 1
-
-        aplicar_estilo_label_metadata(hoja.cell(row=fila, column=columna, value="Descripción:"))
-        aplicar_estilo_valor_metadata(hoja.cell(row=fila, column=columna + 1, value=metadata.get("description", "")))
-        fila += 1
-
-    if encabezado.get("mostrar_fecha"):
-        aplicar_estilo_label_metadata(hoja.cell(row=fila, column=columna, value="Fecha:"))
-        aplicar_estilo_valor_metadata(hoja.cell(row=fila, column=columna + 1, value=datetime.now().strftime("%d/%m/%Y %H:%M")))
-        fila += 1
-
-    return fila + 1
-
-
 # ── Secciones del resumen ─────────────────────────────────────────────────────
 
-def _escribir_seccion_datos_ingresados(hoja, fila, columna, combinaciones, estados, config_seccion):
-    aplicar_estilo_titulo_seccion(hoja, fila, columna, len(config_seccion.get("columnas", [])))
+def _escribir_seccion_resumen_ejecutivo(
+    hoja, fila, columna, combinaciones, estados, config_seccion
+):
+    """
+    Tabla compacta con los totales por estado límite (generadas,
+    duplicadas, superadas descartadas, resultantes), para que alcance
+    con leer esta sección sin recorrer el detalle de las demás.
+    """
+    aplicar_estilo_titulo_seccion(
+        hoja, fila, columna, len(config_seccion.get("columnas", []))
+    )
     hoja.cell(row=fila, column=columna, value=config_seccion["titulo"])
     fila += 1
     encabezados = config_seccion.get("columnas", [])
@@ -206,166 +204,275 @@ def _escribir_seccion_datos_ingresados(hoja, fila, columna, combinaciones, estad
         aplicar_estilo_encabezado_tabla(celda)
     fila_encabezado = fila
     fila += 1
-    for indice, estado in enumerate(estados, start=1):
-        es_direccional = estado["tipo_estado"] == "direccional"
-        nombre_grupo = f"{estado['tipo_carga']}-{estado['grupo']}" if es_direccional else ""
-        opuesto = "" if not es_direccional else ("Sí" if estado.get("incluir_opuesto") else "No")
-        valores = {
-            "Id": indice,
-            "Nombre del estado": estado["nombre_estado"],
-            "Tipo de carga": estado["tipo_carga"],
-            "Tipo de estado": estado["tipo_estado"].capitalize(),
-            "Nombre de grupo": nombre_grupo,
+
+    conteos_por_estado = _contar_por_estado_limite(combinaciones)
+    indice_fila = 0
+    for estado_limite, conteo in conteos_por_estado.items():
+        valores = {"Estado límite": estado_limite, **conteo}
+        for d, t in enumerate(encabezados):
+            celda = hoja.cell(
+                row=fila, column=columna + d, value=valores.get(t, "")
+            )
+            aplicar_estilo_fila_dato(celda, alterna=indice_fila % 2 == 1)
+        fila += 1
+        indice_fila += 1
+
+    valores_total = {
+        "Estado límite": "TOTAL", **_sumar_conteos(conteos_por_estado)
+    }
+    for d, t in enumerate(encabezados):
+        celda = hoja.cell(
+            row=fila, column=columna + d, value=valores_total.get(t, "")
+        )
+        aplicar_estilo_fila_dato_acento(celda, alterna=indice_fila % 2 == 1)
+    fila += 1
+
+    aplicar_borde_perimetral_tabla(
+        hoja, fila_encabezado, fila - 1, columna, columna + len(encabezados) - 1
+    )
+    return fila
+
+
+def _contar_por_estado_limite(
+    combinaciones: list[Combinacion],
+) -> dict[str, dict]:
+    conteos: dict[str, dict] = {}
+    for combinacion in combinaciones:
+        conteo = conteos.setdefault(
+            combinacion.estado_limite,
+            {
+                "Generadas": 0,
+                "Duplicadas": 0,
+                "Superadas (descartadas)": 0,
+                "Resultantes": 0,
+            },
+        )
+        es_duplicada = combinacion.es_duplicada
+        descartada = combinacion.descartada_por_usuario
+
+        conteo["Generadas"] += 1
+        if es_duplicada:
+            conteo["Duplicadas"] += 1
+        if combinacion.esta_superada and descartada:
+            conteo["Superadas (descartadas)"] += 1
+        if not es_duplicada and not descartada:
+            conteo["Resultantes"] += 1
+    return conteos
+
+
+def _sumar_conteos(conteos_por_estado: dict[str, dict]) -> dict[str, int]:
+    total = {
+        "Generadas": 0,
+        "Duplicadas": 0,
+        "Superadas (descartadas)": 0,
+        "Resultantes": 0,
+    }
+    for conteo in conteos_por_estado.values():
+        for clave, valor in conteo.items():
+            total[clave] += valor
+    return total
+
+
+def _escribir_tabla_seccion(
+    hoja,
+    fila,
+    columna,
+    config_seccion,
+    registros,
+    construir_valores,
+    mensaje_vacio=None,
+    estilo_columna=None,
+):
+    """
+    Escribe una sección estándar del resumen: título, encabezados y una
+    fila por cada registro (con bandas alternas y borde perimetral).
+    Las cinco secciones de detalle comparten esta misma estructura y
+    solo difieren en qué registros muestran y cómo arman los valores.
+
+    Args:
+        registros: Lista ya filtrada de elementos a mostrar, uno por fila.
+        construir_valores: Función (indice, registro) -> dict de valores
+            de esa fila, indexados por título de columna.
+        mensaje_vacio: Si se indica, se muestra en vez de la tabla cuando
+            "registros" está vacía.
+        estilo_columna: Función opcional (titulo_columna) -> función de
+            estilo para esa columna, en vez de aplicar_estilo_fila_dato.
+    """
+    aplicar_estilo_titulo_seccion(
+        hoja, fila, columna, len(config_seccion.get("columnas", []))
+    )
+    hoja.cell(row=fila, column=columna, value=config_seccion["titulo"])
+    fila += 1
+
+    if mensaje_vacio is not None and not registros:
+        celda = hoja.cell(row=fila, column=columna, value=mensaje_vacio)
+        aplicar_estilo_mensaje_vacio(celda)
+        return fila + 1
+
+    encabezados = config_seccion.get("columnas", [])
+    for d, t in enumerate(encabezados):
+        celda = hoja.cell(row=fila, column=columna + d, value=t)
+        aplicar_estilo_encabezado_tabla(celda)
+    fila_encabezado = fila
+    fila += 1
+
+    for indice, registro in enumerate(registros):
+        valores = construir_valores(indice, registro)
+        alterna = indice % 2 == 1
+        for d, t in enumerate(encabezados):
+            celda = hoja.cell(
+                row=fila, column=columna + d, value=valores.get(t, "")
+            )
+            estilo = estilo_columna(t) if estilo_columna else None
+            (estilo or aplicar_estilo_fila_dato)(celda, alterna=alterna)
+        fila += 1
+
+    aplicar_borde_perimetral_tabla(
+        hoja, fila_encabezado, fila - 1, columna, columna + len(encabezados) - 1
+    )
+    return fila
+
+
+def _escribir_seccion_datos_ingresados(
+    hoja, fila, columna, combinaciones, estados, config_seccion
+):
+    def construir_valores(indice, estado: EstadoCrudo):
+        es_direccional = estado.tipo_estado == "direccional"
+        nombre_grupo = (
+            f"{estado.tipo_carga}-{estado.grupo}"
+            if es_direccional else ""
+        )
+        opuesto = (
+            "" if not es_direccional
+            else ("Sí" if estado.incluir_opuesto else "No")
+        )
+        return {
+            "Id": indice + 1,
+            "Nombre del estado": neutralizar_texto_libre(estado.nombre_estado),
+            "Tipo de carga": neutralizar_texto_libre(estado.tipo_carga),
+            "Tipo de estado": estado.tipo_estado.capitalize(),
+            "Nombre de grupo": neutralizar_texto_libre(nombre_grupo),
             "Opuesto": opuesto,
         }
-        for d, t in enumerate(encabezados):
-            celda = hoja.cell(row=fila, column=columna + d, value=valores.get(t, ""))
-            aplicar_estilo_fila_dato(celda)
-        fila += 1
-    aplicar_borde_perimetral_tabla(hoja, fila_encabezado, fila - 1, columna, columna + len(encabezados) - 1)
-    return fila
+
+    return _escribir_tabla_seccion(
+        hoja, fila, columna, config_seccion, estados, construir_valores
+    )
 
 
-def _escribir_seccion_combinaciones_generadas(hoja, fila, columna, combinaciones, estados, config_seccion):
-    aplicar_estilo_titulo_seccion(hoja, fila, columna, len(config_seccion.get("columnas", [])))
-    hoja.cell(row=fila, column=columna, value=config_seccion["titulo"])
-    fila += 1
-    encabezados = config_seccion.get("columnas", [])
-    for d, t in enumerate(encabezados):
-        celda = hoja.cell(row=fila, column=columna + d, value=t)
-        aplicar_estilo_encabezado_tabla(celda)
-    fila_encabezado = fila
-    fila += 1
-    for combinacion in combinaciones:
-        valores = {
-            "Id": combinacion["indice_generacion"],
-            "Componentes": formatear_componentes(combinacion["componentes"]),
-            "Estado límite": combinacion["estado_limite"],
-            "Combinación base": combinacion["combinacion_base_id"],
-            "Duplicada por": combinacion["duplicada_por"] if combinacion["es_duplicada"] else "",
-            "Superada por": combinacion["superada_por"] if combinacion["esta_superada"] else "",
+def _escribir_seccion_combinaciones_generadas(
+    hoja, fila, columna, combinaciones, estados, config_seccion
+):
+    def construir_valores(indice, combinacion: Combinacion):
+        return {
+            "Id": combinacion.indice_generacion,
+            "Componentes": formatear_componentes(combinacion.componentes),
+            "Estado límite": combinacion.estado_limite,
+            "Combinación base": combinacion.combinacion_base_id,
+            "Duplicada por": (
+                combinacion.duplicada_por
+                if combinacion.es_duplicada else ""
+            ),
+            "Superada por": (
+                combinacion.superada_por
+                if combinacion.esta_superada else ""
+            ),
             "Decisión": (
-                "Descartada" if combinacion["esta_superada"] and combinacion["descartada_por_usuario"]
-                else "No descartada" if combinacion["esta_superada"] else ""
+                "Descartada"
+                if combinacion.esta_superada
+                and combinacion.descartada_por_usuario
+                else "No descartada" if combinacion.esta_superada else ""
             ),
         }
-        for d, t in enumerate(encabezados):
-            celda = hoja.cell(row=fila, column=columna + d, value=valores.get(t, ""))
-            aplicar_estilo_fila_dato(celda)
-        fila += 1
-    aplicar_borde_perimetral_tabla(hoja, fila_encabezado, fila - 1, columna, columna + len(encabezados) - 1)
-    return fila
+
+    return _escribir_tabla_seccion(
+        hoja, fila, columna, config_seccion, combinaciones, construir_valores
+    )
 
 
-def _escribir_seccion_combinaciones_resultantes(hoja, fila, columna, combinaciones, estados, config_seccion):
-    aplicar_estilo_titulo_seccion(hoja, fila, columna, len(config_seccion.get("columnas", [])))
-    hoja.cell(row=fila, column=columna, value=config_seccion["titulo"])
-    fila += 1
-    resultantes = [c for c in combinaciones if not c["es_duplicada"] and not c["descartada_por_usuario"]]
-    if not resultantes:
-        celda = hoja.cell(row=fila, column=columna, value="(Sin combinaciones resultantes)")
-        aplicar_estilo_mensaje_vacio(celda)
-        return fila + 1
-    encabezados = config_seccion.get("columnas", [])
-    for d, t in enumerate(encabezados):
-        celda = hoja.cell(row=fila, column=columna + d, value=t)
-        aplicar_estilo_encabezado_tabla(celda)
-    fila_encabezado = fila
-    fila += 1
-    for combinacion in resultantes:
-        valores = {
-            "Id": combinacion["indice_generacion"],
-            "Componentes": formatear_componentes(combinacion["componentes"]),
-            "Estado límite": combinacion["estado_limite"],
-            "Combinación base": combinacion["combinacion_base_id"],
-            "Nombre asignado": combinacion.get("nombre") or "",
+def _escribir_seccion_combinaciones_resultantes(
+    hoja, fila, columna, combinaciones, estados, config_seccion
+):
+    resultantes = [
+        c for c in combinaciones
+        if not c.es_duplicada and not c.descartada_por_usuario
+    ]
+
+    def construir_valores(indice, combinacion: Combinacion):
+        return {
+            "Id": combinacion.indice_generacion,
+            "Componentes": formatear_componentes(combinacion.componentes),
+            "Estado límite": combinacion.estado_limite,
+            "Combinación base": combinacion.combinacion_base_id,
+            "Nombre asignado": combinacion.nombre or "",
         }
-        for d, t in enumerate(encabezados):
-            celda = hoja.cell(row=fila, column=columna + d, value=valores.get(t, ""))
-            if t == "Nombre asignado":
-                aplicar_estilo_fila_dato_acento(celda)
-            else:
-                aplicar_estilo_fila_dato(celda)
-        fila += 1
-    aplicar_borde_perimetral_tabla(hoja, fila_encabezado, fila - 1, columna, columna + len(encabezados) - 1)
-    return fila
+
+    def estilo_columna(titulo):
+        if titulo == "Nombre asignado":
+            return aplicar_estilo_fila_dato_acento
+        return None
+
+    return _escribir_tabla_seccion(
+        hoja, fila, columna, config_seccion, resultantes, construir_valores,
+        mensaje_vacio="(Sin combinaciones resultantes)",
+        estilo_columna=estilo_columna,
+    )
 
 
-def _escribir_seccion_duplicados_eliminados(hoja, fila, columna, combinaciones, estados, config_seccion):
-    aplicar_estilo_titulo_seccion(hoja, fila, columna, len(config_seccion.get("columnas", [])))
-    hoja.cell(row=fila, column=columna, value=config_seccion["titulo"])
-    fila += 1
-    duplicadas = [c for c in combinaciones if c["es_duplicada"]]
-    if not duplicadas:
-        celda = hoja.cell(row=fila, column=columna, value="(Sin combinaciones duplicadas)")
-        aplicar_estilo_mensaje_vacio(celda)
-        return fila + 1
-    encabezados = config_seccion.get("columnas", [])
-    for d, t in enumerate(encabezados):
-        celda = hoja.cell(row=fila, column=columna + d, value=t)
-        aplicar_estilo_encabezado_tabla(celda)
-    fila_encabezado = fila
-    fila += 1
-    for combinacion in duplicadas:
-        valores = {
-            "Id": combinacion["indice_generacion"],
-            "Componentes": formatear_componentes(combinacion["componentes"]),
-            "Estado límite": combinacion["estado_limite"],
-            "Combinación base": combinacion["combinacion_base_id"],
-            "Duplicada por": combinacion["duplicada_por"],
+def _escribir_seccion_duplicados_eliminados(
+    hoja, fila, columna, combinaciones, estados, config_seccion
+):
+    duplicadas = [c for c in combinaciones if c.es_duplicada]
+
+    def construir_valores(indice, combinacion: Combinacion):
+        return {
+            "Id": combinacion.indice_generacion,
+            "Componentes": formatear_componentes(combinacion.componentes),
+            "Estado límite": combinacion.estado_limite,
+            "Combinación base": combinacion.combinacion_base_id,
+            "Duplicada por": combinacion.duplicada_por,
         }
-        for d, t in enumerate(encabezados):
-            celda = hoja.cell(row=fila, column=columna + d, value=valores.get(t, ""))
-            aplicar_estilo_fila_dato(celda)
-        fila += 1
-    aplicar_borde_perimetral_tabla(hoja, fila_encabezado, fila - 1, columna, columna + len(encabezados) - 1)
-    return fila
+
+    return _escribir_tabla_seccion(
+        hoja, fila, columna, config_seccion, duplicadas, construir_valores,
+        mensaje_vacio="(Sin combinaciones duplicadas)",
+    )
 
 
-def _escribir_seccion_superadas(hoja, fila, columna, combinaciones, estados, config_seccion):
-    aplicar_estilo_titulo_seccion(hoja, fila, columna, len(config_seccion.get("columnas", [])))
-    hoja.cell(row=fila, column=columna, value=config_seccion["titulo"])
-    fila += 1
-    superadas = [c for c in combinaciones if c["esta_superada"]]
-    filtro = config_seccion.get("filtro")
-    if filtro == "solo_descartadas":
-        superadas = [c for c in superadas if c["descartada_por_usuario"]]
-    if not superadas:
-        celda = hoja.cell(row=fila, column=columna, value="(Sin combinaciones superadas)")
-        aplicar_estilo_mensaje_vacio(celda)
-        return fila + 1
-    encabezados = config_seccion.get("columnas", [])
-    for d, t in enumerate(encabezados):
-        celda = hoja.cell(row=fila, column=columna + d, value=t)
-        aplicar_estilo_encabezado_tabla(celda)
-    fila_encabezado = fila
-    fila += 1
-    for combinacion in superadas:
-        valores = {
-            "Id": combinacion["indice_generacion"],
-            "Componentes": formatear_componentes(combinacion["componentes"]),
-            "Estado límite": combinacion["estado_limite"],
-            "Combinación base": combinacion["combinacion_base_id"],
-            "Superada por": combinacion["superada_por"],
+def _escribir_seccion_superadas(
+    hoja, fila, columna, combinaciones, estados, config_seccion
+):
+    superadas = [c for c in combinaciones if c.esta_superada]
+    if config_seccion.get("filtro") == "solo_descartadas":
+        superadas = [c for c in superadas if c.descartada_por_usuario]
+
+    def construir_valores(indice, combinacion: Combinacion):
+        return {
+            "Id": combinacion.indice_generacion,
+            "Componentes": formatear_componentes(combinacion.componentes),
+            "Estado límite": combinacion.estado_limite,
+            "Combinación base": combinacion.combinacion_base_id,
+            "Superada por": combinacion.superada_por,
         }
-        for d, t in enumerate(encabezados):
-            celda = hoja.cell(row=fila, column=columna + d, value=valores.get(t, ""))
-            aplicar_estilo_fila_dato(celda)
-        fila += 1
-    aplicar_borde_perimetral_tabla(hoja, fila_encabezado, fila - 1, columna, columna + len(encabezados) - 1)
-    return fila
+
+    return _escribir_tabla_seccion(
+        hoja, fila, columna, config_seccion, superadas, construir_valores,
+        mensaje_vacio="(Sin combinaciones superadas)",
+    )
 
 
 # ── Hoja 2: Exportación ───────────────────────────────────────────────────────
 
 def _escribir_hoja_exportacion(
     libro: openpyxl.Workbook,
-    combinaciones: list[dict],
+    combinaciones: list[Combinacion],
     config_exportador: dict,
     reglamento: dict,
 ) -> None:
     nombre_software = config_exportador["metadata"]["software_name"]
-    nombre_hoja_raw = f"Output {nombre_software}".replace("'", "").replace('"', "")
+    nombre_hoja_raw = (
+        f"Output {nombre_software}".replace("'", "").replace('"', "")
+    )
     nombre_hoja = nombre_hoja_raw[:31]
     hoja = libro.create_sheet(nombre_hoja)
 
@@ -377,16 +484,18 @@ def _escribir_hoja_exportacion(
 
     combinaciones_validas = [
         c for c in combinaciones
-        if not c["es_duplicada"] and not c["descartada_por_usuario"]
+        if not c.es_duplicada and not c.descartada_por_usuario
     ]
 
     if layout == "por_componente":
         ancho_tabla_1 = _escribir_layout_por_componente(
-            hoja, combinaciones_validas, config_tabla_combinaciones, fila_inicio, columna_inicio
+            hoja, combinaciones_validas, config_tabla_combinaciones,
+            fila_inicio, columna_inicio,
         )
     elif layout == "por_combinacion":
         ancho_tabla_1 = _escribir_layout_por_combinacion(
-            hoja, combinaciones_validas, config_tabla_combinaciones, fila_inicio, columna_inicio
+            hoja, combinaciones_validas, config_tabla_combinaciones,
+            fila_inicio, columna_inicio,
         )
     else:
         ancho_tabla_1 = 0
@@ -398,7 +507,8 @@ def _escribir_hoja_exportacion(
         separacion = config_tabla_nombres.get("separacion_columnas", 1)
         columna_tabla_nombres = columna_siguiente + separacion
         _escribir_tabla_nombres(
-            hoja, combinaciones_validas, config_tabla_nombres, fila_inicio, columna_tabla_nombres
+            hoja, combinaciones_validas, config_tabla_nombres,
+            fila_inicio, columna_tabla_nombres,
         )
         columna_siguiente = columna_tabla_nombres + 1
 
@@ -412,7 +522,8 @@ def _escribir_hoja_exportacion(
             config_tabla_envolventes.get("prefijo_nombre", "ENV"),
         )
         _escribir_tabla_envolventes(
-            hoja, filas_envolventes, config_tabla_envolventes, fila_inicio, columna_tabla_envolventes
+            hoja, filas_envolventes, config_tabla_envolventes,
+            fila_inicio, columna_tabla_envolventes,
         )
 
     ajustar_anchos_columnas(hoja, columna_inicio)
@@ -432,13 +543,21 @@ def _escribir_layout_por_componente(
         )
         aplicar_estilo_encabezado_tabla(celda)
     fila = fila_inicio + 1
+    indice_fila = 0
     for combinacion in combinaciones_validas:
-        for componente in combinacion["componentes"]:
+        for componente in combinacion.componentes:
             for desplazamiento, columna in enumerate(columnas):
-                valor = _resolver_fuente(columna["fuente"], combinacion, componente)
-                celda = hoja.cell(row=fila, column=columna_inicio + desplazamiento, value=valor)
-                aplicar_estilo_fila_dato(celda)
+                valor = _resolver_fuente(
+                    columna["fuente"], combinacion, componente
+                )
+                celda = hoja.cell(
+                    row=fila,
+                    column=columna_inicio + desplazamiento,
+                    value=valor,
+                )
+                aplicar_estilo_fila_dato(celda, alterna=indice_fila % 2 == 1)
             fila += 1
+            indice_fila += 1
     return len(columnas)
 
 
@@ -451,48 +570,63 @@ def _escribir_layout_por_combinacion(
 
     nombres_estados = _extraer_nombres_estados_en_orden(combinaciones_validas)
 
-    celda = hoja.cell(row=fila_inicio, column=columna_inicio, value=titulo_combinacion)
+    celda = hoja.cell(
+        row=fila_inicio, column=columna_inicio, value=titulo_combinacion
+    )
     aplicar_estilo_encabezado_tabla(celda)
     for desplazamiento, nombre in enumerate(nombres_estados, start=1):
-        celda = hoja.cell(row=fila_inicio, column=columna_inicio + desplazamiento, value=nombre)
+        celda = hoja.cell(
+            row=fila_inicio,
+            column=columna_inicio + desplazamiento,
+            value=neutralizar_texto_libre(nombre),
+        )
         aplicar_estilo_encabezado_tabla(celda)
 
     fila = fila_inicio + 1
-    for combinacion in combinaciones_validas:
-        celda = hoja.cell(row=fila, column=columna_inicio, value=combinacion["nombre"])
-        aplicar_estilo_fila_dato_acento(celda)
+    for indice, combinacion in enumerate(combinaciones_validas):
+        alterna = indice % 2 == 1
+        celda = hoja.cell(
+            row=fila, column=columna_inicio, value=combinacion.nombre
+        )
+        aplicar_estilo_fila_dato_acento(celda, alterna=alterna)
         indice_por_estado = {
-            c["nombre_estado"]: c["factor"] * c["signo"]
-            for c in combinacion["componentes"]
+            c.nombre_estado: c.factor * c.signo
+            for c in combinacion.componentes
         }
         for desplazamiento, nombre in enumerate(nombres_estados, start=1):
             valor = indice_por_estado.get(nombre, None)
-            celda = hoja.cell(row=fila, column=columna_inicio + desplazamiento, value=valor)
-            aplicar_estilo_fila_dato(celda)
+            celda = hoja.cell(
+                row=fila, column=columna_inicio + desplazamiento, value=valor
+            )
+            aplicar_estilo_fila_dato(celda, alterna=alterna)
         fila += 1
 
     return 1 + len(nombres_estados)
 
 
-def _extraer_nombres_estados_en_orden(combinaciones_validas: list[dict]) -> list[str]:
+def _extraer_nombres_estados_en_orden(
+    combinaciones_validas: list[Combinacion],
+) -> list[str]:
     vistos = set()
     nombres = []
     for combinacion in combinaciones_validas:
-        for componente in combinacion["componentes"]:
-            nombre = componente["nombre_estado"]
+        for componente in combinacion.componentes:
+            nombre = componente.nombre_estado
             if nombre not in vistos:
                 vistos.add(nombre)
                 nombres.append(nombre)
     return nombres
 
 
-def _resolver_fuente(fuente: str, combinacion: dict, componente: dict):
+def _resolver_fuente(
+    fuente: str, combinacion: Combinacion, componente: Componente
+):
     if fuente == "nombre_combinacion":
-        return combinacion["nombre"]
+        return combinacion.nombre
     if fuente == "nombre_estado":
-        return componente["nombre_estado"]
+        return neutralizar_texto_libre(componente.nombre_estado)
     if fuente == "factor_por_signo":
-        return componente["factor"] * componente["signo"]
+        return componente.factor * componente.signo
     raise ValueError(f"Fuente de columna desconocida: '{fuente}'")
 
 
@@ -500,17 +634,21 @@ def _resolver_fuente(fuente: str, combinacion: dict, componente: dict):
 
 def _escribir_tabla_nombres(
     hoja,
-    combinaciones_validas: list[dict],
+    combinaciones_validas: list[Combinacion],
     config_tabla: dict,
     fila_inicio: int,
     columna_inicio: int,
 ) -> None:
-    celda = hoja.cell(row=fila_inicio, column=columna_inicio, value=config_tabla["titulo"])
+    celda = hoja.cell(
+        row=fila_inicio, column=columna_inicio, value=config_tabla["titulo"]
+    )
     aplicar_estilo_encabezado_tabla(celda)
     fila = fila_inicio + 1
-    for combinacion in combinaciones_validas:
-        celda = hoja.cell(row=fila, column=columna_inicio, value=combinacion["nombre"])
-        aplicar_estilo_fila_dato(celda)
+    for indice, combinacion in enumerate(combinaciones_validas):
+        celda = hoja.cell(
+            row=fila, column=columna_inicio, value=combinacion.nombre
+        )
+        aplicar_estilo_fila_dato(celda, alterna=indice % 2 == 1)
         fila += 1
 
 
@@ -518,7 +656,7 @@ def _escribir_tabla_nombres(
 
 def _escribir_tabla_envolventes(
     hoja,
-    filas_envolventes: list[dict],
+    filas_envolventes: list,
     config_tabla: dict,
     fila_inicio: int,
     columna_inicio: int,
@@ -532,33 +670,40 @@ def _escribir_tabla_envolventes(
         )
         aplicar_estilo_encabezado_tabla(celda)
 
-    fuentes_por_id = {
+    atributos_por_id = {
         "envelope": "nombre_envolvente",
         "combination": "nombre_combinacion",
         "factor": "factor",
     }
 
     fila = fila_inicio + 1
-    for fila_dato in filas_envolventes:
+    for indice, fila_dato in enumerate(filas_envolventes):
         for desplazamiento, columna in enumerate(columnas):
-            clave = fuentes_por_id.get(columna["id"])
-            valor = fila_dato.get(clave) if clave else None
-            celda = hoja.cell(row=fila, column=columna_inicio + desplazamiento, value=valor)
-            aplicar_estilo_fila_dato(celda)
+            atributo = atributos_por_id.get(columna["id"])
+            valor = getattr(fila_dato, atributo, None) if atributo else None
+            celda = hoja.cell(
+                row=fila, column=columna_inicio + desplazamiento, value=valor
+            )
+            aplicar_estilo_fila_dato(celda, alterna=indice % 2 == 1)
         fila += 1
 
 
 # ── Validaciones ──────────────────────────────────────────────────────────────
 
 def _validar_config_resumen(config_resumen: dict) -> None:
-    campos_requeridos = ["nombre_hoja", "fila_inicio", "columna_inicio", "secciones"]
+    campos_requeridos = [
+        "nombre_hoja", "fila_inicio", "columna_inicio", "secciones"
+    ]
     for campo in campos_requeridos:
         if campo not in config_resumen:
-            raise ValueError(f"config_resumen: falta el campo obligatorio '{campo}'.")
+            raise ValueError(
+                f"config_resumen: falta el campo obligatorio '{campo}'."
+            )
     for seccion in config_resumen["secciones"]:
         if "id" not in seccion or "titulo" not in seccion:
             raise ValueError(
-                "config_resumen: cada sección debe tener los campos 'id' y 'titulo'."
+                "config_resumen: cada sección debe tener los campos "
+                "'id' y 'titulo'."
             )
 
 
@@ -566,38 +711,48 @@ def _validar_config_exportador(config_exportador: dict) -> None:
     if "metadata" not in config_exportador:
         raise ValueError("config_exportador: falta el campo 'metadata'.")
     if "software_name" not in config_exportador["metadata"]:
-        raise ValueError("config_exportador: falta el campo 'metadata.software_name'.")
+        raise ValueError(
+            "config_exportador: falta el campo 'metadata.software_name'."
+        )
     if "hoja" not in config_exportador:
         raise ValueError("config_exportador: falta el campo 'hoja'.")
 
     config_hoja = config_exportador["hoja"]
 
     if "tabla_combinaciones" not in config_hoja:
-        raise ValueError("config_exportador: falta el campo 'hoja.tabla_combinaciones'.")
+        raise ValueError(
+            "config_exportador: falta el campo 'hoja.tabla_combinaciones'."
+        )
 
     config_tabla_combinaciones = config_hoja["tabla_combinaciones"]
 
     if "layout" not in config_tabla_combinaciones:
-        raise ValueError("config_exportador: falta el campo 'hoja.tabla_combinaciones.layout'.")
+        raise ValueError(
+            "config_exportador: falta el campo "
+            "'hoja.tabla_combinaciones.layout'."
+        )
 
     layouts_validos = ("por_componente", "por_combinacion")
     if config_tabla_combinaciones["layout"] not in layouts_validos:
         raise ValueError(
-            f"config_exportador: 'hoja.tabla_combinaciones.layout' tiene un valor inválido: "
-            f"'{config_tabla_combinaciones['layout']}'. Valores posibles: {layouts_validos}."
+            f"config_exportador: 'hoja.tabla_combinaciones.layout' tiene "
+            f"un valor inválido: "
+            f"'{config_tabla_combinaciones['layout']}'. "
+            f"Valores posibles: {layouts_validos}."
         )
 
     if config_tabla_combinaciones["layout"] == "por_componente":
         if "columnas" not in config_tabla_combinaciones:
             raise ValueError(
-                "config_exportador: layout 'por_componente' requiere el campo "
-                "'hoja.tabla_combinaciones.columnas'."
+                "config_exportador: layout 'por_componente' requiere el "
+                "campo 'hoja.tabla_combinaciones.columnas'."
             )
         for columna in config_tabla_combinaciones["columnas"]:
             for campo in ("id", "titulo", "fuente"):
                 if campo not in columna:
                     raise ValueError(
-                        f"config_exportador: la columna '{columna.get('id', '?')}' "
+                        f"config_exportador: la columna "
+                        f"'{columna.get('id', '?')}' "
                         f"no tiene el campo obligatorio '{campo}'."
                     )
 
@@ -605,6 +760,11 @@ def _validar_config_exportador(config_exportador: dict) -> None:
 def _validar_ruta_destino(ruta_destino: str) -> None:
     ruta = Path(ruta_destino)
     if not ruta.parent.exists():
-        raise ValueError(f"El directorio de destino no existe: '{ruta.parent}'.")
+        raise ValueError(
+            f"El directorio de destino no existe: '{ruta.parent}'."
+        )
     if ruta.exists() and not ruta.is_file():
-        raise ValueError(f"La ruta de destino existe pero no es un archivo: '{ruta_destino}'.")
+        raise ValueError(
+            f"La ruta de destino existe pero no es un archivo: "
+            f"'{ruta_destino}'."
+        )
