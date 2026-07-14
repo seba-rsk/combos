@@ -2,7 +2,7 @@
 
 **Generador de combinaciones de carga estructural para ingeniería civil.**
 
-![Versión](https://img.shields.io/badge/versión-1.0.0-blue)
+![Versión](https://img.shields.io/badge/versión-1.1.0-blue)
 ![Licencia](https://img.shields.io/badge/licencia-MIT-green)
 ![Python](https://img.shields.io/badge/Python-3.12+-yellow)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-lightgrey)

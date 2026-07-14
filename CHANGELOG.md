@@ -9,6 +9,12 @@ El versionado sigue [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+(cambios en desarrollo que todavía no tienen versión asignada)
+
+---
+
+## [1.1.0] — 2026-07-13
+
 ### Cambiado
 
 - `pyproject.toml`: se bajó `requires-python` de `>=3.13` a `>=3.12` para ampliar la compatibilidad con usuarios que todavía están en Python 3.12 (soportada hasta octubre 2028). El proyecto no usa ninguna feature exclusiva de 3.13 y las dependencias (`openpyxl`, `pyyaml`, `rich`) corren en 3.12. Verificado con la suite completa (44 tests) en un venv 3.12.
