@@ -3,7 +3,6 @@ from __future__ import annotations
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-
 # ── Paleta ────────────────────────────────────────────────────────────────────
 
 _GRIS_OSCURO      = "2C2C2C"

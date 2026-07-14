@@ -1,20 +1,18 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
-from rich import box
 
-import time
-
+from cli.constantes import FILAS_POR_PAGINA
 from dominio.formateador import formatear_componentes
 from dominio.modelos import Combinacion
-from cli.constantes import FILAS_POR_PAGINA
-
 
 console = Console()
 
@@ -262,8 +260,8 @@ def mostrar_tabla_resumen(combinaciones: list[Combinacion]) -> None:
 
 
 def _chequear_activacion(texto: str) -> bool:
-    import hashlib
     import base64
+    import hashlib
 
     h = "66c0678b0e331c54d77b05176dae0254937fe66d905f628d5859bde341d947c0"
     m = (
@@ -284,12 +282,6 @@ def _chequear_activacion(texto: str) -> bool:
     console.print()
     console.print()
     console.print()
-    # console.print(Panel(
-    #     Text(base64.b64decode(m).decode(), justify="center"),
-    #     box=box.DOUBLE,
-    #     border_style="gold1",
-    #     padding=(1, 4),
-    # ))
 
     decoded = base64.b64decode(m).decode().strip()
 

@@ -8,19 +8,18 @@ import openpyxl
 from dominio.envolventes import construir_envolventes
 from dominio.formateador import formatear_componentes
 from dominio.modelos import Combinacion, Componente, EstadoCrudo
+from infraestructura.encabezado_excel import escribir_encabezado_programa
 from infraestructura.estilos_excel import (
-    aplicar_estilo_titulo_seccion,
+    ajustar_anchos_columnas,
+    aplicar_borde_perimetral_tabla,
     aplicar_estilo_encabezado_tabla,
     aplicar_estilo_fila_dato,
     aplicar_estilo_fila_dato_acento,
     aplicar_estilo_mensaje_vacio,
-    ajustar_anchos_columnas,
-    aplicar_borde_perimetral_tabla,
+    aplicar_estilo_titulo_seccion,
 )
-from infraestructura.sanitizacion_excel import neutralizar_texto_libre
 from infraestructura.guardado_excel import guardar_excel_atomico
-from infraestructura.encabezado_excel import escribir_encabezado_programa
-
+from infraestructura.sanitizacion_excel import neutralizar_texto_libre
 
 # ── Punto de entrada ──────────────────────────────────────────────────────────
 
@@ -586,7 +585,9 @@ def _escribir_layout_por_combinacion(
     for indice, combinacion in enumerate(combinaciones_validas):
         alterna = indice % 2 == 1
         celda = hoja.cell(
-            row=fila, column=columna_inicio, value=combinacion.nombre
+            row=fila,
+            column=columna_inicio,
+            value=neutralizar_texto_libre(combinacion.nombre),
         )
         aplicar_estilo_fila_dato_acento(celda, alterna=alterna)
         indice_por_estado = {
@@ -622,7 +623,7 @@ def _resolver_fuente(
     fuente: str, combinacion: Combinacion, componente: Componente
 ):
     if fuente == "nombre_combinacion":
-        return combinacion.nombre
+        return neutralizar_texto_libre(combinacion.nombre)
     if fuente == "nombre_estado":
         return neutralizar_texto_libre(componente.nombre_estado)
     if fuente == "factor_por_signo":
@@ -646,7 +647,9 @@ def _escribir_tabla_nombres(
     fila = fila_inicio + 1
     for indice, combinacion in enumerate(combinaciones_validas):
         celda = hoja.cell(
-            row=fila, column=columna_inicio, value=combinacion.nombre
+            row=fila,
+            column=columna_inicio,
+            value=neutralizar_texto_libre(combinacion.nombre),
         )
         aplicar_estilo_fila_dato(celda, alterna=indice % 2 == 1)
         fila += 1
@@ -681,6 +684,8 @@ def _escribir_tabla_envolventes(
         for desplazamiento, columna in enumerate(columnas):
             atributo = atributos_por_id.get(columna["id"])
             valor = getattr(fila_dato, atributo, None) if atributo else None
+            if isinstance(valor, str):
+                valor = neutralizar_texto_libre(valor)
             celda = hoja.cell(
                 row=fila, column=columna_inicio + desplazamiento, value=valor
             )

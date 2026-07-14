@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from dominio.lector_yaml import leer_reglamento
-from dominio.lector_plantilla import leer_plantilla
-from dominio.modelos import EstadoCrudo
-from dominio.generador import generar_combinaciones
 from dominio.duplicados import marcar_duplicadas
+from dominio.generador import generar_combinaciones
+from dominio.lector_plantilla import leer_plantilla
+from dominio.lector_yaml import leer_reglamento
+from dominio.modelos import EstadoCrudo
 from dominio.preponderancia import marcar_superadas
 
 RUTA_CIRSOC2005 = Path(__file__).parent.parent / "profiles" / "cirsoc2005.yaml"

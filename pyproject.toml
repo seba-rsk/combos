@@ -21,6 +21,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7",
+    "ruff>=0.4",
+    "bandit>=1.7",
+    "pip-audit>=2.7",
 ]
 
 [project.urls]
@@ -35,6 +38,12 @@ where = ["."]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.yaml"]
+
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

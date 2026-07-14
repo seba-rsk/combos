@@ -4,8 +4,8 @@ import sys
 import traceback
 from datetime import datetime
 
-from version import VERSION
 from infraestructura.rutas import RUTA_LOG
+from version import VERSION
 
 LOG_PATH = RUTA_LOG
 

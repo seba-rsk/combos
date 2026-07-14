@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 
 from infraestructura.estilos_excel import (
-    aplicar_estilo_titulo_programa,
+    ajustar_ancho_columna_titulo,
     aplicar_estilo_etiqueta_hoja,
     aplicar_estilo_label_metadata,
+    aplicar_estilo_titulo_programa,
     aplicar_estilo_valor_metadata,
-    ajustar_ancho_columna_titulo,
 )
 from infraestructura.sanitizacion_excel import neutralizar_texto_libre
 

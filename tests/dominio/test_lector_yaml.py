@@ -6,7 +6,6 @@ import pytest
 
 from dominio.lector_yaml import leer_reglamento
 
-
 YAML_VALIDO = """
 metadata:
   code_name: "TEST"

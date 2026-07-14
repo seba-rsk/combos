@@ -1,4 +1,5 @@
 import os
+
 import openpyxl
 
 from dominio.modelos import EstadoCrudo

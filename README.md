@@ -6,6 +6,7 @@
 ![Licencia](https://img.shields.io/badge/licencia-MIT-green)
 ![Python](https://img.shields.io/badge/Python-3.12+-yellow)
 ![Plataforma](https://img.shields.io/badge/plataforma-Windows-lightgrey)
+![CI](https://github.com/seba-rsk/combos/actions/workflows/ci.yml/badge.svg)
 
 COMBOS lee un reglamento de cargas desde un archivo YAML, procesa una planilla Excel completada por el usuario con sus estados de carga, y exporta las combinaciones válidas en el formato que SAP2000 — u otro software de cálculo — puede importar directamente.
 
@@ -294,7 +295,6 @@ combos/
 ├── version.py                    # Fuente única de la versión del programa
 ├── combos.spec                   # Configuración de build PyInstaller
 ├── pyproject.toml                # Configuración del proyecto y dependencias
-├── requirements.txt              # Dependencias para instalación directa con pip
 ├── combos.ico                    # Icono para versión portable.
 ├── cli/
 │   ├── consola.py                # Funciones de presentación en pantalla
@@ -464,7 +464,7 @@ La carpeta de instalación está incompleta. Asegurate de haber descomprimido el
 
 COMBOS automatiza la generación y filtrado de combinaciones, pero hay decisiones que pertenecen al criterio del ingeniero y tareas que están planificadas para versiones futuras.
 
-**Lo que COMBOS no hace en v1.0:**
+**Lo que COMBOS no hace en esta versión:**
 
 - No decide qué tipo de carga corresponde a cada estado. Esa asignación la realiza el ingeniero en la planilla Excel.
 - No valida si los factores definidos en el YAML son correctos según el reglamento impreso. COMBOS aplica los factores tal como están escritos, sin cotejarlos con ninguna fuente externa.

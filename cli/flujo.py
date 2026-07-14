@@ -1,63 +1,62 @@
 from __future__ import annotations
 
 import sys
+import tkinter as tk
 import traceback
 from datetime import datetime
 from pathlib import Path
-
-import yaml
-import tkinter as tk
 from tkinter import filedialog
 
-from dominio.lector_yaml import leer_reglamento
-from dominio.lector_plantilla import leer_plantilla, ErrorValidacionPlantilla
-from dominio.modelos import Combinacion, Estado, EstadoCrudo
-from dominio.generador import generar_combinaciones
-from dominio.duplicados import marcar_duplicadas
-from dominio.preponderancia import marcar_superadas
-from infraestructura.generador_plantilla import generar_plantilla
-from infraestructura.lector_excel import (
-    leer_excel,
-    ErrorArchivoExcel,
-    ErrorFormatoPlantilla,
-    ErrorDatoFila,
+import yaml
+
+from cli.consola import (
+    mostrar_advertencia,
+    mostrar_ayuda_descartar,
+    mostrar_bienvenida,
+    mostrar_error,
+    mostrar_error_indices,
+    mostrar_errores_validacion,
+    mostrar_exito,
+    mostrar_info,
+    mostrar_lista_archivos,
+    mostrar_procesando,
+    mostrar_separador,
+    mostrar_tabla_resumen,
+    mostrar_tabla_superadas,
+    pedir_confirmacion,
+    pedir_enter,
+    pedir_input,
+    pedir_seleccion_de_archivo,
 )
-from infraestructura.exportador import exportar
-from version import VERSION
-from infraestructura.rutas import (
-    RUTA_PROFILES,
-    RUTA_EXPORTADORES,
-    RUTA_LOG,
-)
-from infraestructura.config_interna import CONFIG_PLANTILLA, CONFIG_RESUMEN
 from cli.constantes import (
-    NOMBRE_CARPETA_ESCRITORIO,
-    PREFIJO_PLANTILLA,
-    PREFIJO_EXPORTACION,
     EXTENSION_EXCEL,
     EXTENSION_YAML,
     FORMATO_FECHA_ARCHIVO,
+    NOMBRE_CARPETA_ESCRITORIO,
+    PREFIJO_EXPORTACION,
+    PREFIJO_PLANTILLA,
 )
-from cli.consola import (
-    mostrar_bienvenida,
-    mostrar_separador,
-    mostrar_exito,
-    mostrar_info,
-    mostrar_advertencia,
-    mostrar_error,
-    mostrar_procesando,
-    mostrar_lista_archivos,
-    mostrar_errores_validacion,
-    mostrar_tabla_superadas,
-    mostrar_ayuda_descartar,
-    mostrar_error_indices,
-    mostrar_tabla_resumen,
-    pedir_input,
-    pedir_seleccion_de_archivo,
-    pedir_confirmacion,
-    pedir_enter,
+from dominio.duplicados import marcar_duplicadas
+from dominio.generador import generar_combinaciones
+from dominio.lector_plantilla import ErrorValidacionPlantilla, leer_plantilla
+from dominio.lector_yaml import leer_reglamento
+from dominio.modelos import Combinacion, Estado, EstadoCrudo
+from dominio.preponderancia import marcar_superadas
+from infraestructura.config_interna import CONFIG_PLANTILLA, CONFIG_RESUMEN
+from infraestructura.exportador import exportar
+from infraestructura.generador_plantilla import generar_plantilla
+from infraestructura.lector_excel import (
+    ErrorArchivoExcel,
+    ErrorDatoFila,
+    ErrorFormatoPlantilla,
+    leer_excel,
 )
-
+from infraestructura.rutas import (
+    RUTA_EXPORTADORES,
+    RUTA_LOG,
+    RUTA_PROFILES,
+)
+from version import VERSION
 
 # ── Punto de entrada ──────────────────────────────────────────────────────────
 
@@ -148,24 +147,48 @@ def _pedir_ruta_destino_plantilla(nombre_yaml: str) -> Path:
     )
     ruta_por_defecto = ruta_escritorio / nombre_archivo
 
-    ruta = _pedir_ruta_con_dialogo(
+    ruta_dialogo = _pedir_ruta_con_dialogo(
         titulo="Guardar plantilla de estados de carga",
         modo="guardar",
         tipos_archivo=[("Excel", f"*{EXTENSION_EXCEL}")],
         ruta_por_defecto=ruta_por_defecto,
     )
-    if ruta is not None:
-        return ruta
 
-    entrada = pedir_input(
-        f"Ruta de destino para la plantilla [Enter = {ruta_por_defecto}]:"
-    ).strip()
-    if not entrada:
-        return ruta_por_defecto
-    ruta = Path(entrada)
-    if ruta.suffix.lower() != EXTENSION_EXCEL:
-        ruta = ruta.with_suffix(EXTENSION_EXCEL)
-    return ruta
+    viene_del_dialogo = ruta_dialogo is not None
+
+    while True:
+        if ruta_dialogo is not None:
+            ruta = ruta_dialogo
+            ruta_dialogo = None
+        else:
+            entrada = pedir_input(
+                "Ruta de destino para la plantilla "
+                f"[Enter = {ruta_por_defecto}]:"
+            ).strip()
+            viene_del_dialogo = False
+            if not entrada:
+                ruta = ruta_por_defecto
+            else:
+                ruta = Path(entrada)
+                if ruta.suffix.lower() != EXTENSION_EXCEL:
+                    ruta = ruta.with_suffix(EXTENSION_EXCEL)
+
+        if ruta.exists():
+            if _archivo_esta_abierto(ruta):
+                mostrar_advertencia(
+                    f"El archivo '{ruta.name}' está abierto. "
+                    "Cerralo e intentá de nuevo, o ingresá otra ruta."
+                )
+                viene_del_dialogo = False
+                continue
+            if not viene_del_dialogo:
+                confirmacion = pedir_confirmacion(
+                    f"El archivo '{ruta.name}' ya existe. ¿Sobreescribir?"
+                )
+                if not confirmacion:
+                    continue
+
+        return ruta
 
 
 # ── Paso 4-5 ──────────────────────────────────────────────────────────────────

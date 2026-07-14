@@ -9,7 +9,28 @@ El versionado sigue [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
-(cambios en desarrollo que todavía no tienen versión asignada)
+### Agregado
+
+- Revisión automática en GitHub Actions (`.github/workflows/ci.yml`): en cada push y pull request contra `main`, el CI corre lint (`ruff`), tests (`pytest`), seguridad estática (`bandit`) y auditoría de dependencias vulnerables (`pip-audit`) sobre una matriz de Python 3.12, 3.13 y 3.14 — las tres versiones que el `pyproject.toml` declara soportar. Se agregaron `ruff`, `bandit` y `pip-audit` a las dependencias opcionales de desarrollo, y una sección `[tool.ruff]` al `pyproject.toml` (línea de 80, reglas `E`/`F`/`W`/`I`).
+- Actualizaciones mensuales agrupadas de dependencias y de las propias acciones del workflow vía Dependabot (`.github/dependabot.yml`). Las alertas de seguridad de dependencias siguen llegando al instante como canal aparte de GitHub, sin esperar el ciclo mensual.
+- Badge de estado de CI en la cabecera del `README.md`.
+
+### Interfaz
+
+- Al elegir la ruta de destino para la plantilla Excel, si el archivo ya existe se pide confirmación antes de sobreescribir (mismo comportamiento que la ruta de exportación). Antes, la generación de plantilla sobreescribía silenciosamente cualquier archivo previo con el mismo nombre.
+
+### Seguridad
+
+- Se completa la neutralización de textos libres antes de escribirlos en las celdas de Excel: el nombre de cada combinación y el nombre de cada envolvente también pasan por `neutralizar_texto_libre`. Antes solo se neutralizaban los nombres de estados de carga; un YAML de reglamento hostil (con un `prefix` que empezara con `=`, `+`, `-` o `@`) podía inyectar una fórmula al archivo generado al abrirlo desde Excel. El uso local individual actual no está expuesto, pero el proyecto habilita compartir YAML de reglamento entre colegas, así que el fix cierra el hallazgo antes de que crezca. Detectado por revisión de seguridad del 2026-07-14.
+
+### Cambiado
+
+- Se elimina `requirements.txt` para dejar `pyproject.toml` como única fuente de verdad de dependencias. Para instalar desde el código fuente, `pip install .` (o `pip install -e ".[dev]"` para desarrollo) reemplaza el uso anterior de `pip install -r requirements.txt`.
+
+### Corregido
+
+- Se corrige la referencia "Lo que COMBOS no hace en v1.0" en el `README.md` — el proyecto está en v1.1.0. El texto pasa a "Lo que COMBOS no hace en esta versión" para que la nota no vuelva a envejecer con cada release.
+- Se elimina un bloque de código comentado en `cli/consola.py` (5 líneas dentro de la función del easter egg) que había quedado como versión alternativa descartada del panel.
 
 ---
 

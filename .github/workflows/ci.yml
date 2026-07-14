@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  calidad:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check dominio cli infraestructura exportadores main.py tests
+
+      - name: Tests (pytest)
+        run: |
+          set +e
+          pytest
+          code=$?
+          if [ "$code" -eq 5 ]; then
+            echo "::warning::Sin tests todavía — Nivel 2/3 requiere tests de lógica. Próximo paso: /test"
+            exit 0
+          fi
+          exit $code
+
+      - name: Seguridad estática (bandit)
+        run: bandit -r dominio cli infraestructura exportadores main.py -ll
+
+      - name: Dependencias vulnerables (pip-audit)
+        run: pip-audit
