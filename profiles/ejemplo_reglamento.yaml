@@ -26,6 +26,39 @@ permanent_load_types:
           #   - D
           #   - F
 
+# Parámetros del reglamento (sección opcional)
+# Un parámetro es una propiedad del proyecto (ej: destino del edificio) que
+# COMBOS pregunta una sola vez por corrida, después de leer los estados de
+# carga y solo si algún estado usa los tipos que el parámetro afecta (si no
+# aplica, se usa su valor por defecto sin preguntar). El valor elegido
+# reemplaza cada referencia { param: <id> } en los factores de las
+# combinaciones, y la elección queda registrada en el encabezado del Excel
+# exportado. Ver profiles/cirsoc2005_actualizado.yaml para un caso real.
+#
+# parameters:
+#   L_factor:                     # Id del parámetro (se usa en las referencias).
+#     name: "Factor de sobrecarga L"   # Título que se muestra en pantalla.
+#     options:                    # Al menos dos opciones.
+#       - label: "Destinos con sobrecarga alta"   # Texto libre, a criterio del autor.
+#         value: 1.0              # Número mayor que cero.
+#       - label: "Resto de los destinos"
+#         value: 0.5
+#     default: 1.0                # Debe coincidir con el value de una opción.
+#
+# Y en la combinación que corresponda, en vez del número fijo:
+#   factors:
+#     D: 1.2
+#     L: { param: L_factor }
+#
+# Validaciones de parameters
+# Sección opcional: si no existe, el reglamento se comporta como siempre.
+# Si existe, no puede estar vacía.
+# Cada parámetro necesita name, options (mínimo dos, cada una con label y
+#   value mayor que cero) y default (igual al value de alguna opción).
+# Toda referencia { param: X } debe apuntar a un parámetro definido.
+# Todo parámetro definido debe ser referenciado por al menos una
+#   combinación; un parámetro sin uso produce error duro (típico typo).
+
 # Estados límite
 limit_states:
   ELU:    # Id del estado límite.
@@ -52,6 +85,25 @@ load_types:
 
 
 # Combinaciones de carga
+#
+# Cada combinación admite un campo opcional name: la designación con la
+# que el reglamento la identifica (ej. "U3.1"). Texto libre, a criterio
+# del autor. COMBOS lo usa para hablarte en la nomenclatura de la norma
+# (ej. la línea "Afecta a" al preguntar por un parámetro); sin name, la
+# combinación se identifica por su id.
+#
+#   - id: 1
+#     name: "U1.1"
+#     factors:
+#       D: 1.4
+#
+# Validaciones de id y name
+# El id debe ser un número entero, único dentro de su estado límite
+#   (puede repetirse entre estados límite distintos). Un id duplicado o
+#   no entero produce error duro.
+# El name, si existe, no puede estar vacío y debe ser único en todo el
+#   reglamento, incluso entre estados límite distintos. Repetirlo
+#   produce error duro.
 combinations:
   ELU:
     - id: 1

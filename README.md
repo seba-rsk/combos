@@ -108,19 +108,23 @@ COMBOS puede generar una planilla Excel en blanco lista para completar, con las 
 
 Seleccionás la planilla Excel completada con tus estados de carga.
 
-**Paso 4 — Procesamiento**
+**Paso 4 — Parámetros del reglamento (solo si aplican a tus estados)**
+
+Si el reglamento define parámetros (por ejemplo, el factor de sobrecarga L según el destino del edificio), COMBOS pregunta una sola vez los que afectan a tus estados de carga, con un menú de opciones. El menú indica qué combinaciones del reglamento afecta cada parámetro, usando la designación de la norma (ej. "Afecta a: ELU · U3.1, U3.3..."). Enter acepta la opción por defecto. La elección queda registrada en el encabezado del Excel exportado. Los parámetros cuyos tipos de carga no tienen estados ingresados no se preguntan — no participan de ninguna combinación generada. Si ningún parámetro aplica, este paso no aparece.
+
+**Paso 5 — Procesamiento**
 
 COMBOS genera todas las combinaciones posibles según el reglamento, detecta duplicadas y analiza preponderancia automáticamente.
 
-**Paso 5 — Resolución de combinaciones superadas**
+**Paso 6 — Resolución de combinaciones superadas**
 
 Para cada grupo de combinaciones superadas, COMBOS te presenta las opciones y vos decidís cuáles descartar y cuáles conservar en el resultado final.
 
-**Paso 6 — Resumen en pantalla**
+**Paso 7 — Resumen en pantalla**
 
 COMBOS muestra en pantalla las combinaciones resultantes con sus componentes, estado límite y nombre asignado.
 
-**Paso 7 — Exportación**
+**Paso 8 — Exportación**
 
 Seleccionás el perfil de exportación y la ruta de destino. COMBOS genera el archivo Excel de salida.
 
@@ -301,17 +305,21 @@ combos/
 │   ├── flujo.py                  # Orquestador del flujo completo
 │   └── constantes.py             # Constantes de la interfaz (rutas, extensiones, prefijos)
 ├── dominio/
+│   ├── modelos.py                # Objetos de dominio (dataclasses) que circulan por el pipeline
 │   ├── generador.py              # Generación de combinaciones de carga
 │   ├── duplicados.py             # Detección y marcado de combinaciones duplicadas
 │   ├── envolventes.py            # Generación de envolventes
 │   ├── preponderancia.py         # Análisis de preponderancia y marcado de combinaciones superadas
 │   ├── formateador.py            # Formateo de combinaciones para su presentación en pantalla
 │   ├── lector_yaml.py            # Lectura y validación de reglamentos YAML
+│   ├── parametros.py             # Resolución de parámetros del reglamento a factores numéricos
 │   └── lector_plantilla.py       # Validación de los estados de carga ingresados por el usuario
 ├── infraestructura/
 │   ├── config_interna.py         # Configuración interna embebida de plantilla y resumen
 │   ├── estilos_excel.py          # Estilos visuales aplicados a los archivos Excel generados
 │   ├── sanitizacion_excel.py     # Neutralización de texto libre antes de escribirlo en Excel
+│   ├── encabezado_excel.py       # Bloque de encabezado compartido por resumen y plantilla
+│   ├── guardado_excel.py         # Guardado atómico de los archivos Excel generados
 │   ├── exportador.py             # Generación del archivo Excel de salida
 │   ├── generador_plantilla.py    # Generación de la planilla Excel en blanco para el usuario
 │   ├── lector_excel.py           # Lectura de la planilla Excel completada por el usuario
@@ -326,9 +334,10 @@ combos/
 │   ├── planilla_output_sap2000.png
 │   └── planilla_output_sap2000_completo.png
 ├── profiles/
-│   ├── ejemplo_reglamento.yaml   # Plantilla comentada para crear un reglamento nuevo
-│   ├── cirsoc2005.yaml           # Reglamento CIRSOC-2005 (Argentina)
-│   └── cirsoc2005_reducido.yaml  # Reglamento CIRSOC-2005 (Argentina) con tipos de cargas más usados
+│   ├── ejemplo_reglamento.yaml          # Plantilla comentada para crear un reglamento nuevo
+│   ├── cirsoc2005.yaml                  # Reglamento CIRSOC-2005 (Argentina)
+│   ├── cirsoc2005_actualizado.yaml      # CIRSOC-2005 con factor de sobrecarga L parametrizado según destino
+│   └── cirsoc2005_reducido.yaml         # Reglamento CIRSOC-2005 (Argentina) con tipos de cargas más usados
 ├── exportadores/
 │   ├── por_combinacion.yaml      # Ejemplo de exportador con layout "una fila por combinación"
 │   ├── por_componente.yaml       # Ejemplo de exportador con layout "una fila por componente"
@@ -357,10 +366,10 @@ metadata:
   country: "País"
   description: "Descripción completa del reglamento"
 
-  # Tipos de carga que representan cargas permanentes gravitatorias.
-  # Obligatorio. Todas las combinaciones deben incluir al menos uno de estos tipos.
-  permanent_load_types:
-    - D
+# Tipos de carga que representan cargas permanentes gravitatorias.
+# Obligatorio. Todas las combinaciones deben incluir al menos uno de estos tipos.
+permanent_load_types:
+  - D
 
 limit_states:
   ELU:
@@ -381,17 +390,21 @@ load_types:
 combinations:
   ELU:
     - id: 1
+      name: "U1.1"    # Designación de la norma (opcional)
       factors:
         D: 1.4
     - id: 2
+      name: "U2.1"
       factors:
         D: 1.2
         L: 1.6
   ELS:
     - id: 1
+      name: "S1.1"
       factors:
         D: 1.0
     - id: 2
+      name: "S1.2"
       factors:
         D: 1.0
         L: 1.0
@@ -423,7 +436,41 @@ combinations:
 - Todos los tipos en `permanent_load_types` deben estar declarados en `load_types`.
 - Todos los tipos usados en `combinations` deben estar declarados en `load_types`.
 - Toda combinación debe contener al menos un tipo de carga permanente.
-- Los factores deben ser mayores que cero.
+- Los factores deben ser mayores que cero, o una referencia a un parámetro (ver la sección siguiente).
+- El `id` de cada combinación debe ser un número entero, único dentro de su estado límite (puede repetirse entre estados límite distintos).
+- El campo `name` de cada combinación es opcional: es la designación con la que la norma la identifica (ej. `"U3.1"`), en texto libre. Si existe, no puede estar vacío y debe ser único en todo el reglamento, incluso entre estados límite. COMBOS lo usa para referirse a las combinaciones en la nomenclatura de la norma; sin `name`, las identifica por su id.
+
+### Parámetros del reglamento (opcional)
+
+Cuando un reglamento admite factores alternativos que dependen de una propiedad del proyecto — por ejemplo, el factor de la sobrecarga L según el destino del edificio —, podés declararlos como **parámetros** en vez de duplicar el archivo YAML por cada variante. COMBOS pregunta cada parámetro una sola vez por corrida — después de leer tus estados de carga, y solo si algún estado usa los tipos que el parámetro afecta —, aplica el valor elegido a todos los factores que lo referencian y registra la elección en el encabezado del Excel exportado. Un parámetro que no aplica a tus estados se resuelve con su valor por defecto sin preguntar.
+
+```yaml
+parameters:
+  L_factor:                            # Id del parámetro
+    name: "Factor de sobrecarga L"     # Título que se muestra en pantalla
+    options:                           # Al menos dos opciones
+      - label: "Cocheras, lugares de reunión pública o L > 5 kN/m²"
+        value: 1.0
+      - label: "Resto de los destinos (L ≤ 5 kN/m²)"
+        value: 0.5
+    default: 1.0                       # Debe coincidir con el value de una opción
+
+combinations:
+  ELU:
+    - id: 5
+      factors:
+        D: 1.2
+        Lr: 1.6
+        L: { param: L_factor }         # Referencia: se resuelve con el valor elegido
+```
+
+Reglas de la sección `parameters`:
+
+- Es opcional. Si no existe, el reglamento se comporta como siempre; si existe, no puede estar vacía.
+- Cada parámetro necesita `name`, al menos dos `options` (cada una con `label` y `value` mayor que cero) y un `default` igual al `value` de alguna opción.
+- Toda referencia `{ param: X }` debe apuntar a un parámetro definido, y todo parámetro definido debe ser usado por al menos una combinación.
+
+El perfil `profiles/cirsoc2005_actualizado.yaml` es un caso real: aplica la excepción del CIRSOC 2005 que permite reducir el factor de L de 1.0 a 0.5 en las combinaciones U3 a U5 del ELU según el destino del edificio.
 
 ---
 

@@ -7,7 +7,12 @@ import openpyxl
 
 from dominio.envolventes import construir_envolventes
 from dominio.formateador import formatear_componentes
-from dominio.modelos import Combinacion, Componente, EstadoCrudo
+from dominio.modelos import (
+    Combinacion,
+    Componente,
+    EleccionParametro,
+    EstadoCrudo,
+)
 from infraestructura.encabezado_excel import escribir_encabezado_programa
 from infraestructura.estilos_excel import (
     ajustar_anchos_columnas,
@@ -21,6 +26,9 @@ from infraestructura.estilos_excel import (
 from infraestructura.guardado_excel import guardar_excel_atomico
 from infraestructura.sanitizacion_excel import neutralizar_texto_libre
 
+# Límite de Excel para el nombre de una hoja.
+MAX_CARACTERES_NOMBRE_HOJA = 31
+
 # ── Punto de entrada ──────────────────────────────────────────────────────────
 
 def exportar(
@@ -28,6 +36,7 @@ def exportar(
     estados_crudos: list[EstadoCrudo],
     estados: list,
     reglamento: dict,
+    elecciones: list[EleccionParametro],
     config_resumen: dict,
     config_exportador: dict,
     ruta_destino: str,
@@ -45,7 +54,10 @@ def exportar(
             planilla del usuario, para la sección "Datos de entrada".
         estados: Estados enriquecidos (con variantes de signo), sin uso
             directo en esta función más que como referencia futura.
-        reglamento: Reglamento ya validado.
+        reglamento: Reglamento ya validado y con los parámetros resueltos.
+        elecciones: Opciones elegidas para los parámetros del reglamento,
+            para registrarlas en el encabezado (lista vacía si el
+            reglamento no define parámetros).
         config_resumen: Configuración de secciones y formato de la hoja
             de resumen (ver infraestructura.config_interna.CONFIG_RESUMEN).
         config_exportador: Configuración del perfil de exportación elegido
@@ -70,7 +82,7 @@ def exportar(
     libro.remove(libro.worksheets[0])
 
     _escribir_hoja_resumen(
-        libro, combinaciones, estados_crudos, reglamento,
+        libro, combinaciones, estados_crudos, reglamento, elecciones,
         config_resumen, nombre_perfil, version,
     )
     _escribir_hoja_exportacion(
@@ -139,6 +151,7 @@ def _escribir_hoja_resumen(
     combinaciones: list[Combinacion],
     estados_crudos: list[EstadoCrudo],
     reglamento: dict,
+    elecciones: list[EleccionParametro],
     config_resumen: dict,
     nombre_perfil: str,
     version: str,
@@ -154,6 +167,7 @@ def _escribir_hoja_resumen(
         nombre_programa=encabezado.get("nombre", "COMBOS"),
         mostrar_reglamento=encabezado.get("mostrar_reglamento", False),
         mostrar_fecha=encabezado.get("mostrar_fecha", False),
+        elecciones=elecciones,
     )
     fila += 1
 
@@ -207,7 +221,10 @@ def _escribir_seccion_resumen_ejecutivo(
     conteos_por_estado = _contar_por_estado_limite(combinaciones)
     indice_fila = 0
     for estado_limite, conteo in conteos_por_estado.items():
-        valores = {"Estado límite": estado_limite, **conteo}
+        valores = {
+            "Estado límite": neutralizar_texto_libre(estado_limite),
+            **conteo,
+        }
         for d, t in enumerate(encabezados):
             celda = hoja.cell(
                 row=fila, column=columna + d, value=valores.get(t, "")
@@ -365,8 +382,12 @@ def _escribir_seccion_combinaciones_generadas(
     def construir_valores(indice, combinacion: Combinacion):
         return {
             "Id": combinacion.indice_generacion,
-            "Componentes": formatear_componentes(combinacion.componentes),
-            "Estado límite": combinacion.estado_limite,
+            "Componentes": neutralizar_texto_libre(
+                formatear_componentes(combinacion.componentes)
+            ),
+            "Estado límite": neutralizar_texto_libre(
+                combinacion.estado_limite
+            ),
             "Combinación base": combinacion.combinacion_base_id,
             "Duplicada por": (
                 combinacion.duplicada_por
@@ -400,10 +421,16 @@ def _escribir_seccion_combinaciones_resultantes(
     def construir_valores(indice, combinacion: Combinacion):
         return {
             "Id": combinacion.indice_generacion,
-            "Componentes": formatear_componentes(combinacion.componentes),
-            "Estado límite": combinacion.estado_limite,
+            "Componentes": neutralizar_texto_libre(
+                formatear_componentes(combinacion.componentes)
+            ),
+            "Estado límite": neutralizar_texto_libre(
+                combinacion.estado_limite
+            ),
             "Combinación base": combinacion.combinacion_base_id,
-            "Nombre asignado": combinacion.nombre or "",
+            "Nombre asignado": neutralizar_texto_libre(
+                combinacion.nombre or ""
+            ),
         }
 
     def estilo_columna(titulo):
@@ -426,8 +453,12 @@ def _escribir_seccion_duplicados_eliminados(
     def construir_valores(indice, combinacion: Combinacion):
         return {
             "Id": combinacion.indice_generacion,
-            "Componentes": formatear_componentes(combinacion.componentes),
-            "Estado límite": combinacion.estado_limite,
+            "Componentes": neutralizar_texto_libre(
+                formatear_componentes(combinacion.componentes)
+            ),
+            "Estado límite": neutralizar_texto_libre(
+                combinacion.estado_limite
+            ),
             "Combinación base": combinacion.combinacion_base_id,
             "Duplicada por": combinacion.duplicada_por,
         }
@@ -448,8 +479,12 @@ def _escribir_seccion_superadas(
     def construir_valores(indice, combinacion: Combinacion):
         return {
             "Id": combinacion.indice_generacion,
-            "Componentes": formatear_componentes(combinacion.componentes),
-            "Estado límite": combinacion.estado_limite,
+            "Componentes": neutralizar_texto_libre(
+                formatear_componentes(combinacion.componentes)
+            ),
+            "Estado límite": neutralizar_texto_libre(
+                combinacion.estado_limite
+            ),
             "Combinación base": combinacion.combinacion_base_id,
             "Superada por": combinacion.superada_por,
         }
@@ -472,7 +507,7 @@ def _escribir_hoja_exportacion(
     nombre_hoja_raw = (
         f"Output {nombre_software}".replace("'", "").replace('"', "")
     )
-    nombre_hoja = nombre_hoja_raw[:31]
+    nombre_hoja = nombre_hoja_raw[:MAX_CARACTERES_NOMBRE_HOJA]
     hoja = libro.create_sheet(nombre_hoja)
 
     config_hoja = config_exportador["hoja"]
@@ -528,6 +563,15 @@ def _escribir_hoja_exportacion(
     ajustar_anchos_columnas(hoja, columna_inicio)
 
 
+def _neutralizar_si_texto(valor):
+    """
+    Aplica neutralizar_texto_libre solo si el valor es texto. Para los
+    títulos definidos en el YAML del exportador, que son texto libre de
+    terceros pero podrían venir como número.
+    """
+    return neutralizar_texto_libre(valor) if isinstance(valor, str) else valor
+
+
 # ── Layout por_componente ─────────────────────────────────────────────────────
 
 def _escribir_layout_por_componente(
@@ -538,7 +582,7 @@ def _escribir_layout_por_componente(
         celda = hoja.cell(
             row=fila_inicio,
             column=columna_inicio + desplazamiento,
-            value=columna["titulo"],
+            value=_neutralizar_si_texto(columna["titulo"]),
         )
         aplicar_estilo_encabezado_tabla(celda)
     fila = fila_inicio + 1
@@ -570,7 +614,9 @@ def _escribir_layout_por_combinacion(
     nombres_estados = _extraer_nombres_estados_en_orden(combinaciones_validas)
 
     celda = hoja.cell(
-        row=fila_inicio, column=columna_inicio, value=titulo_combinacion
+        row=fila_inicio,
+        column=columna_inicio,
+        value=_neutralizar_si_texto(titulo_combinacion),
     )
     aplicar_estilo_encabezado_tabla(celda)
     for desplazamiento, nombre in enumerate(nombres_estados, start=1):
@@ -641,7 +687,9 @@ def _escribir_tabla_nombres(
     columna_inicio: int,
 ) -> None:
     celda = hoja.cell(
-        row=fila_inicio, column=columna_inicio, value=config_tabla["titulo"]
+        row=fila_inicio,
+        column=columna_inicio,
+        value=_neutralizar_si_texto(config_tabla["titulo"]),
     )
     aplicar_estilo_encabezado_tabla(celda)
     fila = fila_inicio + 1
@@ -669,7 +717,7 @@ def _escribir_tabla_envolventes(
         celda = hoja.cell(
             row=fila_inicio,
             column=columna_inicio + desplazamiento,
-            value=columna["titulo"],
+            value=_neutralizar_si_texto(columna["titulo"]),
         )
         aplicar_estilo_encabezado_tabla(celda)
 
@@ -713,20 +761,27 @@ def _validar_config_resumen(config_resumen: dict) -> None:
 
 
 def _validar_config_exportador(config_exportador: dict) -> None:
-    if "metadata" not in config_exportador:
-        raise ValueError("config_exportador: falta el campo 'metadata'.")
+    if not isinstance(config_exportador.get("metadata"), dict):
+        raise ValueError(
+            "config_exportador: falta el campo 'metadata' o no es una "
+            "sección con claves."
+        )
     if "software_name" not in config_exportador["metadata"]:
         raise ValueError(
             "config_exportador: falta el campo 'metadata.software_name'."
         )
-    if "hoja" not in config_exportador:
-        raise ValueError("config_exportador: falta el campo 'hoja'.")
+    if not isinstance(config_exportador.get("hoja"), dict):
+        raise ValueError(
+            "config_exportador: falta el campo 'hoja' o no es una "
+            "sección con claves."
+        )
 
     config_hoja = config_exportador["hoja"]
 
-    if "tabla_combinaciones" not in config_hoja:
+    if not isinstance(config_hoja.get("tabla_combinaciones"), dict):
         raise ValueError(
-            "config_exportador: falta el campo 'hoja.tabla_combinaciones'."
+            "config_exportador: falta el campo 'hoja.tabla_combinaciones' "
+            "o no es una sección con claves."
         )
 
     config_tabla_combinaciones = config_hoja["tabla_combinaciones"]
@@ -747,12 +802,18 @@ def _validar_config_exportador(config_exportador: dict) -> None:
         )
 
     if config_tabla_combinaciones["layout"] == "por_componente":
-        if "columnas" not in config_tabla_combinaciones:
+        if not isinstance(config_tabla_combinaciones.get("columnas"), list):
             raise ValueError(
                 "config_exportador: layout 'por_componente' requiere el "
-                "campo 'hoja.tabla_combinaciones.columnas'."
+                "campo 'hoja.tabla_combinaciones.columnas' como lista."
             )
         for columna in config_tabla_combinaciones["columnas"]:
+            if not isinstance(columna, dict):
+                raise ValueError(
+                    "config_exportador: cada elemento de "
+                    "'hoja.tabla_combinaciones.columnas' debe ser una "
+                    "sección con los campos 'id', 'titulo' y 'fuente'."
+                )
             for campo in ("id", "titulo", "fuente"):
                 if campo not in columna:
                     raise ValueError(

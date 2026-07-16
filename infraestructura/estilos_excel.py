@@ -37,20 +37,24 @@ _borde_fila_dato = Border(
 # ── Funciones públicas ────────────────────────────────────────────────────────
 
 def aplicar_estilo_titulo_programa(celda) -> None:
+    """Estilo del título "COMBOS vX.Y.Z" del encabezado."""
     celda.font = Font(name="Arial", size=13, bold=True, color=_GRIS_OSCURO)
 
 
 def aplicar_estilo_label_metadata(celda) -> None:
+    """Estilo de las etiquetas del encabezado (ej. "Perfil usado:")."""
     celda.font = Font(name="Arial", size=10, color=_GRIS_MEDIO)
 
 
 def aplicar_estilo_valor_metadata(celda) -> None:
+    """Estilo de los valores del encabezado (ej. el nombre del perfil)."""
     celda.font = Font(name="Arial", size=10, bold=False, color=_GRIS_OSCURO)
 
 
 def aplicar_estilo_titulo_seccion(
     hoja, fila: int, columna: int, num_columnas: int
 ) -> None:
+    """Banda gris del título de cada sección de la hoja de resumen."""
     num_cols = max(num_columnas, 1)
     for desplazamiento in range(num_cols):
         celda = hoja.cell(row=fila, column=columna + desplazamiento)
@@ -60,6 +64,7 @@ def aplicar_estilo_titulo_seccion(
 
 
 def aplicar_estilo_encabezado_tabla(celda) -> None:
+    """Estilo de la fila de encabezados de columna de una tabla."""
     celda.fill = PatternFill("solid", fgColor=_GRIS_OSCURO)
     celda.font = Font(name="Arial", size=9, bold=True, color=_BLANCO)
     celda.alignment = Alignment(horizontal="left", vertical="center")
@@ -71,6 +76,7 @@ def aplicar_estilo_encabezado_tabla(celda) -> None:
 
 
 def aplicar_estilo_fila_dato(celda, alterna: bool = False) -> None:
+    """Estilo de una celda de datos, con banda gris en filas alternas."""
     celda.font = Font(name="Arial", size=9, color=_GRIS_OSCURO)
     celda.border = _borde_fila_dato
     celda.alignment = Alignment(
@@ -81,6 +87,7 @@ def aplicar_estilo_fila_dato(celda, alterna: bool = False) -> None:
 
 
 def aplicar_estilo_fila_dato_acento(celda, alterna: bool = False) -> None:
+    """Como aplicar_estilo_fila_dato, pero destacado (ej. nombres, totales)."""
     celda.font = Font(name="Arial", size=9, bold=True, color=_ACENTO)
     celda.border = _borde_fila_dato
     celda.alignment = Alignment(horizontal="left", vertical="center")
@@ -89,10 +96,12 @@ def aplicar_estilo_fila_dato_acento(celda, alterna: bool = False) -> None:
 
 
 def aplicar_estilo_mensaje_vacio(celda) -> None:
+    """Estilo del texto "(Sin combinaciones...)" de una tabla vacía."""
     celda.font = Font(name="Arial", size=9, italic=True, color=_GRIS_MEDIO)
 
 
 def aplicar_estilo_celda_gris(celda) -> None:
+    """Fondo gris fijo para celdas no editables de la plantilla."""
     celda.fill = PatternFill("solid", fgColor=_GRIS_CLARO)
 
 
@@ -112,6 +121,7 @@ def ajustar_ancho_columna_titulo(hoja, columna: int, texto: str) -> None:
 
 
 def ajustar_anchos_columnas(hoja, columna_inicio: int) -> None:
+    """Ajusta cada columna al contenido más largo, entre 10 y 60 unidades."""
     ancho_minimo = 10
     ancho_maximo = 60
 
@@ -132,12 +142,14 @@ def ajustar_anchos_columnas(hoja, columna_inicio: int) -> None:
 
 
 def aplicar_estilo_etiqueta_hoja(celda) -> None:
+    """Estilo de la etiqueta "ENTRADA/SALIDA DE DATOS" del encabezado."""
     celda.font = Font(name="Arial", size=9, bold=True, color=_ACENTO)
 
 
 def aplicar_borde_perimetral_tabla(
     hoja, fila_inicio: int, fila_fin: int, col_inicio: int, col_fin: int
 ) -> None:
+    """Dibuja el borde exterior de una tabla sin pisar los bordes internos."""
     borde_negro = Side(style="thin", color=_NEGRO)
     for numero_fila in range(fila_inicio, fila_fin + 1):
         for numero_col in range(col_inicio, col_fin + 1):

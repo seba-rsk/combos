@@ -30,15 +30,16 @@ def reglamento_minimo() -> dict:
         },
         "combinations": {
             "ELU": [
-                {"id": 1, "factors": {"D": 1.4}},
-                {"id": 2, "factors": {"D": 1.2, "L": 1.6}},
-                {"id": 3, "factors": {"D": 1.2, "W": 1.6}},
+                {"id": 1, "name": None, "factors": {"D": 1.4}},
+                {"id": 2, "name": None, "factors": {"D": 1.2, "L": 1.6}},
+                {"id": 3, "name": None, "factors": {"D": 1.2, "W": 1.6}},
             ],
             "ELS": [
-                {"id": 1, "factors": {"D": 1.0, "L": 1.0}},
+                {"id": 1, "name": None, "factors": {"D": 1.0, "L": 1.0}},
             ],
         },
         "permanent_load_types": ["D"],
+        "parameters": {},
     }
 
 

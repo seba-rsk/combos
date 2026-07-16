@@ -54,6 +54,46 @@ class Componente:
 
 
 @dataclass
+class OpcionParametro:
+    """
+    Una opción elegible de un parámetro del reglamento: la etiqueta que
+    ve el usuario (texto libre del autor del YAML) y el valor numérico
+    del factor que esa opción representa.
+    """
+
+    etiqueta: str
+    valor: float
+
+
+@dataclass
+class ParametroReglamento:
+    """
+    Un parámetro del reglamento: una propiedad del proyecto (ej. destino
+    del edificio) que el usuario define una sola vez y que resuelve el
+    valor de los factores que lo referencian con { param: <id> }.
+    """
+
+    id_parametro: str
+    nombre: str
+    opciones: list[OpcionParametro]
+    valor_default: float
+
+
+@dataclass
+class EleccionParametro:
+    """
+    La opción que el usuario eligió para un parámetro del reglamento.
+    Viaja hasta la exportación para dejar registrada la elección en el
+    encabezado del archivo generado (trazabilidad).
+    """
+
+    id_parametro: str
+    nombre: str
+    valor: float
+    etiqueta: str
+
+
+@dataclass
 class Combinacion:
     """
     Una combinación de carga generada por el pipeline. Los campos de

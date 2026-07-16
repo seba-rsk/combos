@@ -4,6 +4,7 @@ import sys
 import traceback
 from datetime import datetime
 
+from cli.constantes import FORMATO_TIMESTAMP_LOG
 from infraestructura.rutas import RUTA_LOG
 from version import VERSION
 
@@ -11,6 +12,11 @@ LOG_PATH = RUTA_LOG
 
 
 def main() -> None:
+    """
+    Punto de entrada de COMBOS: ejecuta el flujo completo y convierte
+    cualquier error inesperado en un mensaje amable más un informe en el
+    log, sin exponer detalles técnicos en pantalla.
+    """
     try:
         from cli.flujo import ejecutar_flujo
         ejecutar_flujo()
@@ -39,7 +45,7 @@ def main() -> None:
 
 
 def _escribir_log_error() -> None:
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
     with open(LOG_PATH, "a", encoding="utf-8") as f:
         f.write(f"\n{'=' * 60}\n")
         f.write(f"  COMBOS v{VERSION}  —  {timestamp}\n")

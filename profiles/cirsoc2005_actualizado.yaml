@@ -1,0 +1,342 @@
+# CIRSOC — con factor de sobrecarga L parametrizado
+# Tipos de carga + Combinaciones específicas para Argentina.
+# Igual a cirsoc2005.yaml, pero aplica la excepción del reglamento que
+# permite reducir el factor de L de 1.0 a 0.5 en las combinaciones
+# U3 a U5 del ELU, según el destino del edificio. COMBOS pregunta el
+# destino una sola vez por corrida, después de leer tus estados de
+# carga y solo si algún estado usa el tipo L.
+
+metadata:
+  code_name: "CIRSOC"
+  code_version: "2005"
+  country: "Argentina"
+  description: "Reglamento Argentino de Cargas y Combinaciones — factor de sobrecarga L según destino"
+
+permanent_load_types:
+  - D
+
+# Parámetros del reglamento
+# Cada parámetro se pregunta una sola vez por corrida (después de leer
+# los estados de carga, y solo si aplica a ellos); su valor reemplaza
+# las referencias { param: <id> } en los factores.
+parameters:
+  L_factor:
+    name: "Factor de sobrecarga L"
+    options:
+      - label: "Cocheras, lugares de reunión pública o L > 5 kN/m²"
+        value: 1.0
+      - label: "Resto de los destinos (L ≤ 5 kN/m²)"
+        value: 0.5
+    default: 1.0
+
+# Estados límite
+limit_states:
+  ELU:    # Id del estado límite.
+    name: "Estado límite último"
+    prefix: "U"
+
+  ELS:    # Id del estado límite.
+    name: "Estado límite de servicio"
+    prefix: "S"
+
+# Definición de tipos de carga soportados
+load_types:
+  D:      # Id del tipo de carga.
+    name: "Cargas permanentes"
+    description: "Cargas permanentes debidas al peso de los elementos estructurales y de los elementos que actúan en forma permanente sobre la estructura, o las solicitaciones correspondientes."
+
+  L:      # Id del tipo de carga.
+    name: "Cargas vivas"
+    description: "Sobrecargas debida a la ocupación y a los equipos móviles, o las solicitaciones correspondientes."
+
+  Lr:      # Id del tipo de carga.
+    name: "Sobrecarga de cubiertas"
+    description: "Sobrecargas en las cubiertas, o las solicitaciones correspondientes."
+
+  S:      # Id del tipo de carga.
+    name: "Carga de nieve"
+    description: "Carga debida a la nieve, o las solicitaciones correspondientes."
+
+  Di:      # Id del tipo de carga.
+    name: "Carga de hielo"
+    description: "Carga debida al peso del hielo, o las solicitaciones correspondientes."
+
+  W:      # Id del tipo de carga.
+    name: "Carga de viento"
+    description: "Carga debida al viento, o las solicitaciones correspondientes."
+
+  Wi:      # Id del tipo de carga.
+    name: "Carga de viento sobre el hielo"
+    description: "Carga debida al viento actuando sobre el hielo, o las solicitaciones correspondientes."
+
+  E:      # Id del tipo de carga.
+    name: "Carga sísmica"
+    description: "Efecto provocado por las componentes horizontal y vertical de la acción sísmica."
+
+  T:      # Id del tipo de carga.
+    name: "Efecto de temperatura"
+    description: "Solicitaciones de coacción y efectos provenientes de la contracción o expansión resultante de las variaciones de temperatura, fluencia lenta de los materiales componentes, contracción, cambios de humedad y asentamientos diferenciales o sus combinaciones."
+
+  F:      # Id del tipo de carga.
+    name: "Cargas por fluidos"
+    description: "Cargas debidas al peso y presión de fluidos con presiones bien definidas y alturas máximas controlables, o las solicitaciones correspondientes."
+
+  H:      # Id del tipo de carga.
+    name: "Cargas de suelos"
+    description: "Cargas debidas al peso y presión lateral del suelo, del agua en el suelo u otros materiales, o las solicitaciones correspondientes."
+
+  R:      # Id del tipo de carga.
+    name: "Cargas por lluvia"
+    description: "Carga debida a la lluvia, o las solicitaciones correspondientes."
+
+# Combinaciones de carga
+# El campo name es la designación con la que el reglamento identifica
+# cada combinación. Es opcional, pero permite que COMBOS te hable en la
+# nomenclatura de la norma (ej. al preguntar por un parámetro).
+combinations:
+  ELU:
+    - id: 1
+      name: "U1.1"
+      # U1.1 = 1.4(D+F)
+      factors:
+        D: 1.4
+        F: 1.4
+
+    - id: 2
+      name: "U2.1"
+      # U2.1 = 1.2(D+F+T)+1.6(L+H)+0.5Lr
+      factors:
+        D: 1.2
+        F: 1.2
+        T: 1.2
+        L: 1.6
+        H: 1.6
+        Lr: 0.5
+
+    - id: 3
+      name: "U2.2"
+      # U2.2 = 1.2(D+F+T)+1.6(L+H)+0.5S+0.2Di
+      factors:
+        D: 1.2
+        F: 1.2
+        T: 1.2
+        L: 1.6
+        H: 1.6
+        S: 0.5
+        Di: 0.2
+
+    - id: 4
+      name: "U2.3"
+      # U2.3 = 1.2(D+F+T)+1.6(L+H)+0.5R
+      factors:
+        D: 1.2
+        F: 1.2
+        T: 1.2
+        L: 1.6
+        H: 1.6
+        R: 0.5
+
+    - id: 5
+      name: "U3.1"
+      # U3.1 = 1.2D+1.6Lr+f1·L  (f1 = L_factor)
+      factors:
+        D: 1.2
+        Lr: 1.6
+        L: { param: L_factor }
+
+    - id: 6
+      name: "U3.2"
+      # U3.2 = 1.2D+1.6Lr+0.8W
+      factors:
+        D: 1.2
+        Lr: 1.6
+        W: 0.8
+
+    - id: 7
+      name: "U3.3"
+      # U3.3 = 1.2D+1.6S+f1·L  (f1 = L_factor)
+      factors:
+        D: 1.2
+        S: 1.6
+        L: { param: L_factor }
+
+    - id: 8
+      name: "U3.4"
+      # U3.4 = 1.2D+1.6S+0.8W
+      factors:
+        D: 1.2
+        S: 1.6
+        W: 0.8
+
+    - id: 9
+      name: "U3.5"
+      # U3.5 = 1.2D+1.6R+f1·L  (f1 = L_factor)
+      factors:
+        D: 1.2
+        R: 1.6
+        L: { param: L_factor }
+
+    - id: 10
+      name: "U3.6"
+      # U3.6 = 1.2D+1.6R+0.8W
+      factors:
+        D: 1.2
+        R: 1.6
+        W: 0.8
+
+    - id: 11
+      name: "U4.1"
+      # U4.1 = 1.2D+1.6W+f1·L+0.5Lr  (f1 = L_factor)
+      factors:
+        D: 1.2
+        W: 1.6
+        L: { param: L_factor }
+        Lr: 0.5
+
+    - id: 12
+      name: "U4.2"
+      # U4.2 = 1.2D+1.6W+f1·L+0.5S  (f1 = L_factor)
+      factors:
+        D: 1.2
+        W: 1.6
+        L: { param: L_factor }
+        S: 0.5
+
+    - id: 13
+      name: "U4.3"
+      # U4.3 = 1.2D+1.6W+f1·L+0.5R  (f1 = L_factor)
+      factors:
+        D: 1.2
+        W: 1.6
+        L: { param: L_factor }
+        R: 0.5
+
+    - id: 14
+      name: "U4.4"
+      # U4.4 = 1.2D+1.0Wi+1.0Di+0.5S
+      factors:
+        D: 1.2
+        Wi: 1.0
+        Di: 1.0
+        S: 0.5
+
+    - id: 15
+      name: "U5.1"
+      # U5.1 = 1.2D+1.0E+f1·L+0.7S  (f1 = L_factor)
+      factors:
+        D: 1.2
+        E: 1.0
+        L: { param: L_factor }
+        S: 0.7
+
+    - id: 16
+      name: "U5.2"
+      # U5.2 = 1.2D+1.0E+1.0Lr+0.7S
+      factors:
+        D: 1.2
+        E: 1.0
+        Lr: 1.0
+        S: 0.7
+
+    - id: 17
+      name: "U6.1"
+      # U6.1 = 0.9D+1.6W+1.6H
+      factors:
+        D: 0.9
+        W: 1.6
+        H: 1.6
+
+    - id: 18
+      name: "U6.2"
+      # U6.2 = 0.9D+1.6Wi+1.0Di+1.6H
+      factors:
+        D: 0.9
+        Wi: 1.6
+        Di: 1.0
+        H: 1.6
+
+    - id: 19
+      name: "U7.1"
+      # U7.1 = 0.9D+1.0E+1.6H
+      factors:
+        D: 0.9
+        E: 1.0
+        H: 1.6
+
+  ELS:
+    - id: 1
+      name: "S1.1"
+      # S1.1 = D+F+T
+      factors:
+        D: 1.0
+        F: 1.0
+        T: 1.0
+
+    - id: 2
+      name: "S1.2"
+      # S1.2 = D+F+L+Lr+S+R+H
+      factors:
+        D: 1.0
+        F: 1.0
+        L: 1.0
+        Lr: 1.0
+        S: 1.0
+        R: 1.0
+        H: 1.0
+
+    - id: 3
+      name: "S1.3"
+      # S1.3 = D+F+W
+      factors:
+        D: 1.0
+        F: 1.0
+        W: 1.0
+
+    - id: 4
+      name: "S2.1"
+      # S2.1 = D+F+0.7L+0.7Lr+0.7S+0.7R+0.7H+0.7W
+      factors:
+        D: 1.0
+        F: 1.0
+        L: 0.7
+        Lr: 0.7
+        S: 0.7
+        R: 0.7
+        H: 0.7
+        W: 0.7
+
+    - id: 5
+      name: "S2.2"
+      # S2.2 = D+F+0.7W+0.7T
+      factors:
+        D: 1.0
+        F: 1.0
+        W: 0.7
+        T: 0.7
+
+    - id: 6
+      name: "S2.3"
+      # S2.3 = D+F+0.7L+0.7Lr+0.7S+0.7R+0.7H+0.7T
+      factors:
+        D: 1.0
+        F: 1.0
+        L: 0.7
+        Lr: 0.7
+        S: 0.7
+        R: 0.7
+        H: 0.7
+        T: 0.7
+
+    - id: 7
+      name: "S3.1"
+      # S3.1 = D+F+0.6L+0.6Lr+0.6S+0.6R+0.6H+0.6W+0.6T
+      factors:
+        D: 1.0
+        F: 1.0
+        L: 0.6
+        Lr: 0.6
+        S: 0.6
+        R: 0.6
+        H: 0.6
+        W: 0.6
+        T: 0.6

@@ -13,12 +13,15 @@ from cli.consola import (
     mostrar_advertencia,
     mostrar_ayuda_descartar,
     mostrar_bienvenida,
+    mostrar_cantidad_parametros,
+    mostrar_eleccion_confirmada,
     mostrar_error,
     mostrar_error_indices,
     mostrar_errores_validacion,
     mostrar_exito,
     mostrar_info,
     mostrar_lista_archivos,
+    mostrar_menu_parametro,
     mostrar_procesando,
     mostrar_separador,
     mostrar_tabla_resumen,
@@ -32,6 +35,7 @@ from cli.constantes import (
     EXTENSION_EXCEL,
     EXTENSION_YAML,
     FORMATO_FECHA_ARCHIVO,
+    FORMATO_TIMESTAMP_LOG,
     NOMBRE_CARPETA_ESCRITORIO,
     PREFIJO_EXPORTACION,
     PREFIJO_PLANTILLA,
@@ -40,7 +44,21 @@ from dominio.duplicados import marcar_duplicadas
 from dominio.generador import generar_combinaciones
 from dominio.lector_plantilla import ErrorValidacionPlantilla, leer_plantilla
 from dominio.lector_yaml import leer_reglamento
-from dominio.modelos import Combinacion, Estado, EstadoCrudo
+from dominio.modelos import (
+    Combinacion,
+    EleccionParametro,
+    Estado,
+    EstadoCrudo,
+    ParametroReglamento,
+)
+from dominio.parametros import (
+    combinaciones_que_referencian,
+    crear_eleccion,
+    numero_opcion_default,
+    parametros_que_aplican,
+    resolver_parametros,
+    tipos_de_carga_que_referencian,
+)
 from dominio.preponderancia import marcar_superadas
 from infraestructura.config_interna import CONFIG_PLANTILLA, CONFIG_RESUMEN
 from infraestructura.exportador import exportar
@@ -61,6 +79,11 @@ from version import VERSION
 # ── Punto de entrada ──────────────────────────────────────────────────────────
 
 def ejecutar_flujo() -> None:
+    """
+    Orquesta el flujo completo de COMBOS: reglamento → plantilla →
+    lectura y validación de estados → parámetros → generación →
+    duplicadas → superadas → resumen → exportación.
+    """
     mostrar_bienvenida(VERSION)
 
     reglamento, nombre_perfil = _paso_cargar_reglamento()
@@ -72,6 +95,10 @@ def ejecutar_flujo() -> None:
     estados_crudos = _paso_leer_excel_del_usuario(reglamento)
 
     estados_enriquecidos = _paso_validar_plantilla(estados_crudos, reglamento)
+
+    reglamento, elecciones = _paso_resolver_parametros(
+        reglamento, estados_enriquecidos
+    )
 
     combinaciones = _paso_generar_combinaciones(
         estados_enriquecidos, reglamento
@@ -93,7 +120,7 @@ def ejecutar_flujo() -> None:
 
     _paso_exportar(
         combinaciones, estados_crudos, estados_enriquecidos,
-        reglamento, nombre_perfil,
+        reglamento, elecciones, nombre_perfil,
     )
 
 
@@ -261,6 +288,85 @@ def _paso_validar_plantilla(
     return estados_enriquecidos
 
 
+# ── Paso 6b: parámetros del reglamento ────────────────────────────────────────
+
+def _paso_resolver_parametros(
+    reglamento: dict, estados: list[Estado]
+) -> tuple[dict, list[EleccionParametro]]:
+    """
+    Pregunta al usuario los parámetros del reglamento que aplican a sus
+    estados de carga y devuelve el reglamento con los factores ya
+    resueltos a números, junto con las elecciones para registrarlas en
+    la exportación. Los parámetros que no aplican (ningún estado
+    ingresado usa los tipos de carga que los referencian) se resuelven
+    con su valor por defecto sin preguntar ni registrar, porque su
+    valor no participa de ninguna combinación generada.
+    """
+    if not reglamento["parameters"]:
+        return reglamento, []
+
+    tipos_presentes = {estado.tipo_carga for estado in estados}
+    aplicables, no_aplicables = parametros_que_aplican(
+        reglamento, tipos_presentes
+    )
+
+    elecciones_del_usuario: list[EleccionParametro] = []
+    if aplicables:
+        elecciones_del_usuario = _preguntar_parametros(
+            reglamento, aplicables
+        )
+
+    elecciones_internas = [
+        crear_eleccion(parametro, numero_opcion_default(parametro))
+        for parametro in no_aplicables
+    ]
+    reglamento_resuelto = resolver_parametros(
+        reglamento, elecciones_del_usuario + elecciones_internas
+    )
+    return reglamento_resuelto, elecciones_del_usuario
+
+
+def _preguntar_parametros(
+    reglamento: dict, parametros: list[ParametroReglamento]
+) -> list[EleccionParametro]:
+    mostrar_separador("Parámetros del reglamento")
+    mostrar_cantidad_parametros(len(parametros))
+
+    elecciones: list[EleccionParametro] = []
+    for parametro in parametros:
+        tipos_afectados = tipos_de_carga_que_referencian(
+            reglamento, parametro.id_parametro
+        )
+        combinaciones_afectadas = combinaciones_que_referencian(
+            reglamento, parametro.id_parametro
+        )
+        mostrar_menu_parametro(
+            parametro, tipos_afectados, combinaciones_afectadas
+        )
+        numero_elegido = _pedir_numero_de_opcion(parametro)
+        eleccion = crear_eleccion(parametro, numero_elegido)
+        elecciones.append(eleccion)
+        mostrar_eleccion_confirmada(eleccion)
+    return elecciones
+
+
+def _pedir_numero_de_opcion(parametro: ParametroReglamento) -> int:
+    cantidad = len(parametro.opciones)
+    numero_default = numero_opcion_default(parametro)
+    while True:
+        entrada = pedir_input(
+            f"Elija una opción (1-{cantidad}) [Enter = {numero_default}]:"
+        ).strip()
+        if entrada == "":
+            return numero_default
+        if entrada.isdigit() and 1 <= int(entrada) <= cantidad:
+            return int(entrada)
+        mostrar_advertencia(
+            f"Ingrese un número entre 1 y {cantidad}, o Enter para la "
+            "opción por defecto."
+        )
+
+
 # ── Paso 7 ────────────────────────────────────────────────────────────────────
 
 def _paso_generar_combinaciones(
@@ -399,6 +505,7 @@ def _paso_exportar(
     estados_crudos: list[EstadoCrudo],
     estados: list[Estado],
     reglamento: dict,
+    elecciones: list[EleccionParametro],
     nombre_perfil: str,
 ) -> None:
     mostrar_separador("Exportación")
@@ -416,7 +523,7 @@ def _paso_exportar(
     mostrar_procesando(f"Exportando combinaciones a: {ruta_destino} ...")
     try:
         exportar(
-            combinaciones, estados_crudos, estados, reglamento,
+            combinaciones, estados_crudos, estados, reglamento, elecciones,
             config_resumen, config_exportador, str(ruta_destino),
             nombre_perfil, VERSION,
         )
@@ -438,17 +545,20 @@ def _leer_config_resumen() -> dict:
 
 def _leer_config_exportador(ruta_yaml: Path) -> dict:
     try:
-        return yaml.safe_load(ruta_yaml.read_text(encoding="utf-8"))
+        config = yaml.safe_load(ruta_yaml.read_text(encoding="utf-8"))
     except yaml.YAMLError as error:
         _loguear_error_tecnico(
             f"lectura del perfil de exportación '{ruta_yaml.name}'",
             error,
         )
+        config = None
+    if not isinstance(config, dict):
         _terminar_con_error(
             f"El perfil de exportación '{ruta_yaml.name}' tiene un "
             f"formato inválido. Revisá el YAML o pedí una versión "
             f"corregida a quien te lo compartió."
         )
+    return config
 
 
 def _pedir_ruta_destino_exportacion(ruta_exportador: Path) -> Path:
@@ -591,7 +701,7 @@ def _loguear_fallo_dialogo() -> None:
     archivo falló. El flujo continúa pidiendo la ruta por teclado; este
     registro solo evita que el fallo quede oculto sin rastro.
     """
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
     with open(RUTA_LOG, "a", encoding="utf-8") as f:
         f.write(f"\n{'=' * 60}\n")
         f.write(
@@ -609,7 +719,7 @@ def _loguear_error_tecnico(contexto: str, error: BaseException) -> None:
     reporte de soporte tenga la información técnica sin ensuciar la
     pantalla del usuario final.
     """
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
     with open(RUTA_LOG, "a", encoding="utf-8") as f:
         f.write(f"\n{'=' * 60}\n")
         f.write(

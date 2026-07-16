@@ -22,23 +22,6 @@ Un log de sesión completo, uno por ejecución, guardado en la carpeta `logs/` j
 
 ---
 
-## Combinaciones con factores alternativos no soportadas
-
-**Versión afectada:** 1.0.0
-**Planificado para:** v2
-
-### Descripción
-
-Algunos reglamentos definen combinaciones donde el factor de un tipo de carga varía en función de la sobrecarga presente. Por ejemplo, una combinación puede especificar que el factor de `L` es `1.0` si la sobrecarga es de almacenaje y `0.5` en cualquier otro caso. Esta lógica condicional implica que una misma combinación base puede generar filas con factores distintos según el contexto.
-
-COMBOS no soporta esta estructura en v1.0.0. Cada combinación del YAML admite un único factor fijo por tipo de carga. Si el reglamento que necesitás usar incluye este tipo de variantes, la solución provisoria es definir las variantes como combinaciones base separadas en el YAML, cada una con sus factores fijos correspondientes.
-
-### Recomendación para el usuario
-
-Si tu reglamento requiere factores alternativos, definí una combinación independiente por cada variante. Revisá el archivo `profiles/ejemplo_reglamento.yaml` para ver la estructura de combinaciones base.
-
----
-
 ## Combinaciones incompletas no detectadas como superadas
 
 **Versión afectada:** 1.0.0

@@ -5,14 +5,24 @@ from pathlib import Path
 
 from rich import box
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
-from cli.constantes import FILAS_POR_PAGINA
+from cli.constantes import (
+    ANCHO_DESIGNACIONES_AFECTADAS,
+    ANCHO_SEPARADOR_ESTADO,
+    FILAS_POR_PAGINA,
+    PAUSA_SEPARADOR_SEGUNDOS,
+)
 from dominio.formateador import formatear_componentes
-from dominio.modelos import Combinacion
+from dominio.modelos import (
+    Combinacion,
+    EleccionParametro,
+    ParametroReglamento,
+)
 
 console = Console()
 
@@ -20,6 +30,7 @@ console = Console()
 # ── Estructura ────────────────────────────────────────────────────────────────
 
 def mostrar_bienvenida(version: str) -> None:
+    """Muestra el panel de bienvenida con la versión y el enlace al repo."""
     console.print()
     console.print(Panel(
         Text.assemble(
@@ -43,54 +54,182 @@ def mostrar_bienvenida(version: str) -> None:
 
 
 def mostrar_separador(titulo: str) -> None:
+    """Imprime la línea separadora que abre cada sección del flujo."""
     console.print()
-    time.sleep(0.3)
+    time.sleep(PAUSA_SEPARADOR_SEGUNDOS)
     console.print(Rule(title=titulo, style="grey50", align="left"))
 
 
 # ── Mensajes de estado ────────────────────────────────────────────────────────
+#
+# Política de escape de markup: los mensajes que interpolan texto libre
+# (de un YAML, de una celda de Excel o del teclado) se escapan acá, en el
+# punto de impresión — mostrar_exito, mostrar_error, mostrar_procesando y
+# los mensajes de validación. mostrar_info y mostrar_advertencia quedan
+# sin escapar porque sus llamadores usan markup a propósito ([bold],
+# [dim]) y solo interpolan números o texto propio del programa.
 
 def mostrar_exito(mensaje: str) -> None:
-    console.print(f"  [green]✓[/green]  {mensaje}")
+    """Muestra un mensaje de operación completada, con tilde verde."""
+    console.print(f"  [green]✓[/green]  {escape(mensaje)}")
 
 
 def mostrar_info(mensaje: str) -> None:
+    """Muestra un mensaje informativo; el llamador puede usar markup."""
     console.print(f"  {mensaje}")
 
 
 def mostrar_advertencia(mensaje: str) -> None:
+    """Muestra una advertencia no fatal; el llamador puede usar markup."""
     console.print(f"  [yellow]![/yellow]  {mensaje}")
 
 
 def mostrar_error(mensaje: str) -> None:
+    """Muestra un error fatal antes de terminar el programa."""
     console.print()
-    console.print(f"  [bold red]Error:[/bold red] {mensaje}")
+    console.print(f"  [bold red]Error:[/bold red] {escape(mensaje)}")
     console.print()
 
 
 def mostrar_procesando(mensaje: str) -> None:
-    console.print(f"  [dim]{mensaje}[/dim]")
+    """Muestra en dim qué operación está en curso."""
+    console.print(f"  [dim]{escape(mensaje)}[/dim]")
 
 
 # ── Listas de archivos ────────────────────────────────────────────────────────
 
 def mostrar_lista_archivos(archivos: list[Path], descripcion_tipo: str) -> None:
+    """Lista numerada de archivos disponibles para elegir uno."""
     console.print()
     console.print(f"  [bold]Archivos de {descripcion_tipo} disponibles:[/bold]")
     for numero, archivo in enumerate(archivos, start=1):
-        console.print(f"    [dim]{numero}.[/dim]  {archivo.name}")
+        console.print(f"    [dim]{numero}.[/dim]  {escape(archivo.name)}")
+
+
+# ── Parámetros del reglamento ─────────────────────────────────────────────────
+
+def mostrar_cantidad_parametros(cantidad: int) -> None:
+    """Anuncia cuántos parámetros del reglamento hay que definir."""
+    console.print()
+    if cantidad == 1:
+        mensaje = "Este reglamento requiere definir 1 parámetro del proyecto."
+    else:
+        mensaje = (
+            f"Este reglamento requiere definir {cantidad} parámetros "
+            "del proyecto."
+        )
+    console.print(f"  {mensaje}")
+
+
+def mostrar_menu_parametro(
+    parametro: ParametroReglamento,
+    tipos_afectados: list[str],
+    combinaciones_afectadas: dict[str, list[str | int]],
+) -> None:
+    """
+    Muestra el título del parámetro, la línea "Afecta a" con las
+    designaciones normativas de las combinaciones que lo referencian
+    (agrupadas por estado límite) y sus opciones numeradas, con el
+    factor que cada opción representa alineado a la derecha en dim
+    (ej. "L × 0.5"), para que el dato técnico quede visible sin competir
+    con la etiqueta.
+    """
+    console.print()
+    console.print(f"  [bold]{escape(parametro.nombre)}:[/bold]")
+    _mostrar_combinaciones_afectadas(combinaciones_afectadas)
+    console.print()
+    ancho_etiquetas = max(
+        len(opcion.etiqueta) for opcion in parametro.opciones
+    )
+    tipos = escape(", ".join(tipos_afectados))
+    for numero, opcion in enumerate(parametro.opciones, start=1):
+        relleno = " " * (ancho_etiquetas - len(opcion.etiqueta))
+        console.print(
+            f"    [dim]{numero}.[/dim]  {escape(opcion.etiqueta)}{relleno}  "
+            f"[dim]{tipos} × {opcion.valor}[/dim]"
+        )
+    console.print()
+
+
+def _mostrar_combinaciones_afectadas(
+    afectadas: dict[str, list[str | int]],
+) -> None:
+    """
+    Escribe la línea "Afecta a" del menú de parámetros: una línea por
+    estado límite con las designaciones normativas de las combinaciones
+    afectadas, envueltas con sangría colgante si superan el ancho
+    máximo. Las combinaciones sin designación se muestran como "id N".
+    """
+    if not afectadas:
+        return
+    etiqueta = "Afecta a:"
+    sangria_estado = " " * (2 + len(etiqueta) + 2)
+    es_primer_estado = True
+    for id_estado, designaciones in afectadas.items():
+        lineas = _envolver_designaciones(
+            designaciones, ANCHO_DESIGNACIONES_AFECTADAS
+        )
+        sangria_texto = sangria_estado + " " * (len(id_estado) + 3)
+        for numero_linea, linea in enumerate(lineas):
+            if numero_linea > 0:
+                console.print(f"{sangria_texto}{escape(linea)}")
+            elif es_primer_estado:
+                console.print(
+                    f"  [dim]{etiqueta}[/dim]  "
+                    f"[dim]{escape(id_estado)} ·[/dim] {escape(linea)}"
+                )
+            else:
+                console.print(
+                    f"{sangria_estado}[dim]{escape(id_estado)} ·[/dim] "
+                    f"{escape(linea)}"
+                )
+        es_primer_estado = False
+
+
+def _envolver_designaciones(
+    designaciones: list[str | int], ancho_maximo: int
+) -> list[str]:
+    lineas: list[str] = []
+    actual = ""
+    for designacion in designaciones:
+        texto = (
+            designacion
+            if isinstance(designacion, str)
+            else f"id {designacion}"
+        )
+        candidata = f"{actual}, {texto}" if actual else texto
+        if actual and len(candidata) > ancho_maximo:
+            lineas.append(f"{actual},")
+            actual = texto
+        else:
+            actual = candidata
+    lineas.append(actual)
+    return lineas
+
+
+def mostrar_eleccion_confirmada(eleccion: EleccionParametro) -> None:
+    """
+    Confirma en pantalla la opción elegida para un parámetro, repitiendo
+    nombre, valor y etiqueta para que lo que quedó aplicado nunca sea
+    ambiguo. El nombre y la etiqueta son texto libre del YAML.
+    """
+    console.print(
+        f"  [green]✓[/green]  {escape(eleccion.nombre)}: {eleccion.valor} "
+        f"— {escape(eleccion.etiqueta)}"
+    )
 
 
 # ── Errores de validación ─────────────────────────────────────────────────────
 
 def mostrar_errores_validacion(errores: list[str]) -> None:
+    """Lista con viñetas los errores de validación de la plantilla."""
     console.print()
     console.print(
         f"  [bold red]Se encontraron {len(errores)} error(es) "
         "en la plantilla:[/bold red]"
     )
     for error in errores:
-        console.print(f"    [red]•[/red]  {error}")
+        console.print(f"    [red]•[/red]  {escape(error)}")
     console.print()
 
 
@@ -100,6 +239,11 @@ def mostrar_tabla_superadas(
     superadas: list[Combinacion],
     indice_por_generacion: dict[int, Combinacion],
 ) -> None:
+    """
+    Muestra las combinaciones superadas agrupadas por estado límite y
+    por la combinación dominante que las supera, paginando cada
+    FILAS_POR_PAGINA filas.
+    """
     console.print()
     console.print(
         f"  [bold]Combinaciones superadas por preponderancia:[/bold]  "
@@ -115,7 +259,10 @@ def mostrar_tabla_superadas(
 
     for estado_limite, grupo in por_estado_limite.items():
         console.print()
-        console.print(f"  [grey50]{estado_limite} {'─' * 60}[/grey50]")
+        console.print(
+            f"  [grey50]{escape(estado_limite)} "
+            f"{'─' * ANCHO_SEPARADOR_ESTADO}[/grey50]"
+        )
 
         por_dominante: dict[int, list[Combinacion]] = {}
         for combinacion in grupo:
@@ -164,6 +311,7 @@ def mostrar_tabla_superadas(
 # ── Ayuda para input de descarte ──────────────────────────────────────────────
 
 def mostrar_ayuda_descartar() -> None:
+    """Recuerda las formas válidas de responder al prompt de descarte."""
     console.print()
     console.print(
         "  [dim]all[/dim] · todas    "
@@ -173,12 +321,14 @@ def mostrar_ayuda_descartar() -> None:
 
 
 def mostrar_error_indices(mensaje: str) -> None:
-    console.print(f"  [red]✗[/red]  {mensaje}")
+    """Marca como inválida una entrada del prompt de descarte."""
+    console.print(f"  [red]✗[/red]  {escape(mensaje)}")
 
 
 # ── Prompt de input ───────────────────────────────────────────────────────────
 
 def pedir_input(pregunta: str) -> str:
+    """Pide una línea de texto al usuario y la devuelve sin procesar."""
     return console.input(f"  [bold]{pregunta}[/bold] ")
 
 
@@ -197,6 +347,7 @@ def pedir_seleccion_de_archivo(pregunta: str, al_reimprimir=None) -> str:
 
 
 def pedir_confirmacion(pregunta: str) -> bool:
+    """Pregunta sí/no; cualquier respuesta distinta de sí cuenta como no."""
     respuesta = console.input(
         f"  [bold]{pregunta}[/bold] [dim]\\[s/N][/dim]: "
     ).strip().lower()
@@ -204,10 +355,15 @@ def pedir_confirmacion(pregunta: str) -> bool:
 
 
 def pedir_enter(mensaje: str) -> None:
+    """Pausa hasta que el usuario presione Enter."""
     console.input(f"  [dim]{mensaje}[/dim] ")
 
 
 def mostrar_tabla_resumen(combinaciones: list[Combinacion]) -> None:
+    """
+    Muestra las combinaciones resultantes (sin duplicadas ni descartadas)
+    agrupadas por estado límite, paginando cada FILAS_POR_PAGINA filas.
+    """
     validas = [
         c for c in combinaciones
         if not c.es_duplicada and not c.descartada_por_usuario
@@ -228,7 +384,10 @@ def mostrar_tabla_resumen(combinaciones: list[Combinacion]) -> None:
 
     for estado_limite, grupo in por_estado_limite.items():
         console.print()
-        console.print(f"  [grey50]{estado_limite} {'─' * 60}[/grey50]")
+        console.print(
+            f"  [grey50]{escape(estado_limite)} "
+            f"{'─' * ANCHO_SEPARADOR_ESTADO}[/grey50]"
+        )
 
         for inicio in range(0, len(grupo), FILAS_POR_PAGINA):
             pagina = grupo[inicio:inicio + FILAS_POR_PAGINA]
@@ -247,7 +406,7 @@ def mostrar_tabla_resumen(combinaciones: list[Combinacion]) -> None:
                 indice = combinacion.indice_generacion
                 tabla.add_row(
                     Text(f"#{indice}", style="yellow"),
-                    componentes,
+                    Text(componentes),
                 )
 
             console.print(tabla)
