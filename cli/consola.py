@@ -359,63 +359,63 @@ def pedir_enter(mensaje: str) -> None:
     console.input(f"  [dim]{mensaje}[/dim] ")
 
 
-def mostrar_tabla_resumen(combinaciones: list[Combinacion]) -> None:
+def mostrar_tabla_resumen(resultantes: list[Combinacion]) -> None:
     """
-    Muestra las combinaciones resultantes (sin duplicadas ni descartadas)
-    agrupadas por estado límite, paginando cada FILAS_POR_PAGINA filas.
+    Muestra las combinaciones resultantes agrupadas por estado límite,
+    paginando cada FILAS_POR_PAGINA filas. Recibe la lista ya filtrada
+    (ver dominio.sesion.combinaciones_resultantes).
     """
-    validas = [
-        c for c in combinaciones
-        if not c.es_duplicada and not c.descartada_por_usuario
-    ]
-
     console.print()
     console.print(
         f"  [bold]Combinaciones resultantes:[/bold]  "
-        f"[green]{len(validas)}[/green]"
+        f"[green]{len(resultantes)}[/green]"
     )
-
-    por_estado_limite: dict[str, list[Combinacion]] = {}
-    for combinacion in validas:
-        estado = combinacion.estado_limite
-        if estado not in por_estado_limite:
-            por_estado_limite[estado] = []
-        por_estado_limite[estado].append(combinacion)
-
-    for estado_limite, grupo in por_estado_limite.items():
-        console.print()
-        console.print(
-            f"  [grey50]{escape(estado_limite)} "
-            f"{'─' * ANCHO_SEPARADOR_ESTADO}[/grey50]"
-        )
-
-        for inicio in range(0, len(grupo), FILAS_POR_PAGINA):
-            pagina = grupo[inicio:inicio + FILAS_POR_PAGINA]
-
-            tabla = Table(
-                box=box.SIMPLE,
-                show_header=False,
-                padding=(0, 1),
-                show_edge=False,
-            )
-            tabla.add_column(no_wrap=True)
-            tabla.add_column(style="white")
-
-            for combinacion in pagina:
-                componentes = formatear_componentes(combinacion.componentes)
-                indice = combinacion.indice_generacion
-                tabla.add_row(
-                    Text(f"#{indice}", style="yellow"),
-                    Text(componentes),
-                )
-
-            console.print(tabla)
-
-            if inicio + FILAS_POR_PAGINA < len(grupo):
-                pedir_enter("Presione Enter para ver más...")
-
+    for estado_limite, grupo in _agrupar_por_estado_limite(resultantes).items():
+        _mostrar_grupo_de_estado_limite(estado_limite, grupo)
     console.print()
     pedir_enter("Presione Enter para continuar con la exportación:")
+
+
+def _agrupar_por_estado_limite(
+    combinaciones: list[Combinacion],
+) -> dict[str, list[Combinacion]]:
+    grupos: dict[str, list[Combinacion]] = {}
+    for combinacion in combinaciones:
+        grupos.setdefault(combinacion.estado_limite, []).append(combinacion)
+    return grupos
+
+
+def _mostrar_grupo_de_estado_limite(
+    estado_limite: str, grupo: list[Combinacion]
+) -> None:
+    console.print()
+    console.print(
+        f"  [grey50]{escape(estado_limite)} "
+        f"{'─' * ANCHO_SEPARADOR_ESTADO}[/grey50]"
+    )
+    for inicio in range(0, len(grupo), FILAS_POR_PAGINA):
+        console.print(_construir_tabla_pagina(
+            grupo[inicio:inicio + FILAS_POR_PAGINA]
+        ))
+        if inicio + FILAS_POR_PAGINA < len(grupo):
+            pedir_enter("Presione Enter para ver más...")
+
+
+def _construir_tabla_pagina(pagina: list[Combinacion]) -> Table:
+    tabla = Table(
+        box=box.SIMPLE,
+        show_header=False,
+        padding=(0, 1),
+        show_edge=False,
+    )
+    tabla.add_column(no_wrap=True)
+    tabla.add_column(style="white")
+    for combinacion in pagina:
+        tabla.add_row(
+            Text(f"#{combinacion.indice_generacion}", style="yellow"),
+            Text(formatear_componentes(combinacion.componentes)),
+        )
+    return tabla
 
 
 def _chequear_activacion(texto: str) -> bool:

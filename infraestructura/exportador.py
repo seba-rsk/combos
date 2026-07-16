@@ -13,6 +13,7 @@ from dominio.modelos import (
     EleccionParametro,
     EstadoCrudo,
 )
+from dominio.sesion import Sesion
 from infraestructura.encabezado_excel import escribir_encabezado_programa
 from infraestructura.estilos_excel import (
     ajustar_anchos_columnas,
@@ -32,15 +33,10 @@ MAX_CARACTERES_NOMBRE_HOJA = 31
 # ── Punto de entrada ──────────────────────────────────────────────────────────
 
 def exportar(
-    combinaciones: list[Combinacion],
-    estados_crudos: list[EstadoCrudo],
-    estados: list,
-    reglamento: dict,
-    elecciones: list[EleccionParametro],
+    sesion: Sesion,
     config_resumen: dict,
     config_exportador: dict,
     ruta_destino: str,
-    nombre_perfil: str,
     version: str,
 ) -> None:
     """
@@ -48,23 +44,15 @@ def exportar(
     completo y la hoja de exportación en el formato configurado.
 
     Args:
-        combinaciones: Combinaciones ya marcadas como duplicadas y
-            superadas, con la decisión del usuario ya aplicada.
-        estados_crudos: Estados de carga tal como fueron leídos de la
-            planilla del usuario, para la sección "Datos de entrada".
-        estados: Estados enriquecidos (con variantes de signo), sin uso
-            directo en esta función más que como referencia futura.
-        reglamento: Reglamento ya validado y con los parámetros resueltos.
-        elecciones: Opciones elegidas para los parámetros del reglamento,
-            para registrarlas en el encabezado (lista vacía si el
-            reglamento no define parámetros).
+        sesion: Sesión ya procesada y con la decisión de descartes
+            aplicada: aporta las combinaciones, los estados leídos, el
+            reglamento resuelto, las elecciones de parámetros y el
+            nombre del perfil para el encabezado.
         config_resumen: Configuración de secciones y formato de la hoja
             de resumen (ver infraestructura.config_interna.CONFIG_RESUMEN).
         config_exportador: Configuración del perfil de exportación elegido
             (YAML de la carpeta exportadores/).
         ruta_destino: Ruta donde se guarda el archivo Excel generado.
-        nombre_perfil: Nombre del archivo de reglamento usado, para
-            mostrarlo en el encabezado del Excel.
         version: Versión de COMBOS, para mostrarla en el encabezado.
 
     Raises:
@@ -76,17 +64,18 @@ def exportar(
     _validar_config_exportador(config_exportador)
     _validar_ruta_destino(ruta_destino)
 
-    _asignar_nombres(combinaciones, reglamento)
+    _asignar_nombres(sesion.combinaciones, sesion.reglamento)
 
     libro = openpyxl.Workbook()
     libro.remove(libro.worksheets[0])
 
     _escribir_hoja_resumen(
-        libro, combinaciones, estados_crudos, reglamento, elecciones,
-        config_resumen, nombre_perfil, version,
+        libro, sesion.combinaciones, sesion.estados_crudos,
+        sesion.reglamento, sesion.elecciones,
+        config_resumen, sesion.nombre_perfil, version,
     )
     _escribir_hoja_exportacion(
-        libro, combinaciones, config_exportador, reglamento
+        libro, sesion.combinaciones, config_exportador, sesion.reglamento
     )
 
     if libro.worksheets:
@@ -775,52 +764,56 @@ def _validar_config_exportador(config_exportador: dict) -> None:
             "config_exportador: falta el campo 'hoja' o no es una "
             "sección con claves."
         )
-
-    config_hoja = config_exportador["hoja"]
-
-    if not isinstance(config_hoja.get("tabla_combinaciones"), dict):
+    config_tabla_combinaciones = config_exportador["hoja"].get(
+        "tabla_combinaciones"
+    )
+    if not isinstance(config_tabla_combinaciones, dict):
         raise ValueError(
             "config_exportador: falta el campo 'hoja.tabla_combinaciones' "
             "o no es una sección con claves."
         )
+    _validar_layout_tabla_combinaciones(config_tabla_combinaciones)
 
-    config_tabla_combinaciones = config_hoja["tabla_combinaciones"]
 
-    if "layout" not in config_tabla_combinaciones:
+LAYOUTS_TABLA_COMBINACIONES = ("por_componente", "por_combinacion")
+
+
+def _validar_layout_tabla_combinaciones(config_tabla: dict) -> None:
+    if "layout" not in config_tabla:
         raise ValueError(
             "config_exportador: falta el campo "
             "'hoja.tabla_combinaciones.layout'."
         )
-
-    layouts_validos = ("por_componente", "por_combinacion")
-    if config_tabla_combinaciones["layout"] not in layouts_validos:
+    if config_tabla["layout"] not in LAYOUTS_TABLA_COMBINACIONES:
         raise ValueError(
             f"config_exportador: 'hoja.tabla_combinaciones.layout' tiene "
-            f"un valor inválido: "
-            f"'{config_tabla_combinaciones['layout']}'. "
-            f"Valores posibles: {layouts_validos}."
+            f"un valor inválido: '{config_tabla['layout']}'. "
+            f"Valores posibles: {LAYOUTS_TABLA_COMBINACIONES}."
         )
+    if config_tabla["layout"] == "por_componente":
+        _validar_columnas_por_componente(config_tabla.get("columnas"))
 
-    if config_tabla_combinaciones["layout"] == "por_componente":
-        if not isinstance(config_tabla_combinaciones.get("columnas"), list):
+
+def _validar_columnas_por_componente(columnas) -> None:
+    if not isinstance(columnas, list):
+        raise ValueError(
+            "config_exportador: layout 'por_componente' requiere el "
+            "campo 'hoja.tabla_combinaciones.columnas' como lista."
+        )
+    for columna in columnas:
+        if not isinstance(columna, dict):
             raise ValueError(
-                "config_exportador: layout 'por_componente' requiere el "
-                "campo 'hoja.tabla_combinaciones.columnas' como lista."
+                "config_exportador: cada elemento de "
+                "'hoja.tabla_combinaciones.columnas' debe ser una sección "
+                "con los campos 'id', 'titulo' y 'fuente'."
             )
-        for columna in config_tabla_combinaciones["columnas"]:
-            if not isinstance(columna, dict):
+        for campo in ("id", "titulo", "fuente"):
+            if campo not in columna:
                 raise ValueError(
-                    "config_exportador: cada elemento de "
-                    "'hoja.tabla_combinaciones.columnas' debe ser una "
-                    "sección con los campos 'id', 'titulo' y 'fuente'."
+                    f"config_exportador: la columna "
+                    f"'{columna.get('id', '?')}' no tiene el campo "
+                    f"obligatorio '{campo}'."
                 )
-            for campo in ("id", "titulo", "fuente"):
-                if campo not in columna:
-                    raise ValueError(
-                        f"config_exportador: la columna "
-                        f"'{columna.get('id', '?')}' "
-                        f"no tiene el campo obligatorio '{campo}'."
-                    )
 
 
 def _validar_ruta_destino(ruta_destino: str) -> None:

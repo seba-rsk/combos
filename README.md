@@ -306,6 +306,7 @@ combos/
 │   └── constantes.py             # Constantes de la interfaz (rutas, extensiones, prefijos)
 ├── dominio/
 │   ├── modelos.py                # Objetos de dominio (dataclasses) que circulan por el pipeline
+│   ├── sesion.py                 # Estado de una corrida (Sesion) y operaciones del pipeline
 │   ├── generador.py              # Generación de combinaciones de carga
 │   ├── duplicados.py             # Detección y marcado de combinaciones duplicadas
 │   ├── envolventes.py            # Generación de envolventes

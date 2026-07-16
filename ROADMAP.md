@@ -68,3 +68,52 @@ casi nulo.
 
 **Condición de activación:** cuando la GUI esté publicada y estable, y algún
 usuario pida el reporte en PDF.
+
+---
+
+## Endurecer sanitización de `software_name` para nombre de hoja Excel
+
+**Identificado por:** auditoría `/auditoria` — revisor de seguridad
+(2026-07-16, severidad baja).
+
+**Descripción:** el `software_name` del YAML del reglamento se usa como
+nombre de hoja de Excel sin validar contra las reglas de openpyxl (largo
+máximo 31 caracteres, caracteres inválidos `\ / * ? [ ] :`). Un reglamento
+propio mal armado hace fallar el export. Hoy con "único dueño" es un error
+autoinfligido; con reglamentos importados de terceros deja de serlo.
+
+**Condición de activación:** cuando se acepten reglamentos importados desde
+usuarios que no sean el autor.
+
+---
+
+## Escritura atómica con nombre de temporal no predecible
+
+**Identificado por:** auditoría `/auditoria` — revisor de seguridad
+(2026-07-16, severidad baja).
+
+**Descripción:** el archivo temporal usado en `infraestructura/guardado_excel.py`
+tiene nombre determinista (`.name.tmp`). En directorios compartidos habilita
+race por symlink. En una CLI local operada por su único dueño no hay
+superficie explotable, pero si aparece un instalador que corra con
+privilegios elevados o si el destino puede ser un directorio compartido, sí.
+
+**Condición de activación:** cuando el software se distribuya con instalador
+o cuando el destino pueda ser un directorio compartido.
+
+---
+
+## Anonimización del log de errores para soporte
+
+**Identificado por:** auditoría `/auditoria` — revisor de seguridad
+(2026-07-16, severidad baja).
+
+**Descripción:** `main.py` escribe el traceback completo en
+`combos_error.log` — incluye rutas absolutas (`OneDrive`, `ANTRA`, nombre
+de usuario). El propio README pide enviar ese archivo a soporte. En un CLI
+para el autor es aceptable; distribuido a terceros, expone datos del
+usuario final. Además, la interpolación del traceback en el log no escapa
+caracteres de control: un nombre de archivo malicioso puede inyectar líneas.
+
+**Condición de activación:** al distribuir el software a terceros o al
+publicar un mecanismo automático de envío de logs.

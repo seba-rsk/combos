@@ -28,6 +28,7 @@ def leer_reglamento(ruta_yaml: str) -> dict:
     contenido_crudo = _leer_archivo(ruta_yaml)
     datos = _parsear_yaml(contenido_crudo, ruta_yaml)
     _validar_secciones_obligatorias(datos)
+    _validar_estructura_de_secciones(datos)
     parametros = _validar_y_construir_parametros(datos)
     tipos_de_carga_definidos = set(datos["load_types"].keys())
     _validar_combinaciones(
@@ -79,6 +80,121 @@ def _validar_secciones_obligatorias(datos: dict) -> None:
         raise ValueError(
             f"El reglamento está incompleto. "
             f"Secciones faltantes: {sorted(secciones_faltantes)}"
+        )
+
+
+def _validar_estructura_de_secciones(datos: dict) -> None:
+    """
+    Verifica que cada sección obligatoria tenga la estructura esperada
+    (mapeo o lista, según corresponda) antes de que el pipeline itere
+    sobre ellas. Sin esta validación, un reglamento mal armado provoca
+    errores técnicos internos difíciles de interpretar para quien lo
+    escribió.
+    """
+    _exigir_mapeo_no_vacio("metadata", datos["metadata"])
+    _exigir_mapeo_no_vacio("limit_states", datos["limit_states"])
+    _exigir_mapeo_no_vacio("load_types", datos["load_types"])
+    _exigir_mapeo_no_vacio("combinations", datos["combinations"])
+    _exigir_lista_no_vacia(
+        "permanent_load_types", datos["permanent_load_types"]
+    )
+    _validar_estructura_de_limit_states(datos["limit_states"])
+    _validar_estructura_de_load_types(datos["load_types"])
+    _validar_estructura_de_combinations(datos["combinations"])
+
+
+def _exigir_mapeo_no_vacio(nombre_seccion: str, valor) -> None:
+    if not isinstance(valor, dict) or not valor:
+        raise ValueError(
+            f"La sección '{nombre_seccion}' debe ser un mapeo de pares "
+            f"clave/valor no vacío. Revisá el ejemplo en "
+            f"profiles/ejemplo_reglamento.yaml."
+        )
+
+
+def _exigir_lista_no_vacia(nombre_seccion: str, valor) -> None:
+    if not isinstance(valor, list) or not valor:
+        raise ValueError(
+            f"La sección '{nombre_seccion}' debe ser una lista no vacía "
+            f"(por ejemplo '- D')."
+        )
+
+
+def _validar_estructura_de_limit_states(limit_states: dict) -> None:
+    for id_estado, datos_estado in limit_states.items():
+        contexto = (
+            f"El estado límite '{id_estado}' de la sección limit_states"
+        )
+        if not isinstance(datos_estado, dict):
+            raise ValueError(
+                f"{contexto} debe ser un mapeo con las claves 'name' y "
+                f"'prefix'."
+            )
+        for clave in ("name", "prefix"):
+            valor = datos_estado.get(clave)
+            if not isinstance(valor, str) or not valor.strip():
+                raise ValueError(
+                    f"{contexto}: falta la clave '{clave}' o está vacía."
+                )
+
+
+def _validar_estructura_de_load_types(load_types: dict) -> None:
+    for id_tipo, datos_tipo in load_types.items():
+        contexto = f"El tipo de carga '{id_tipo}' de la sección load_types"
+        if not isinstance(datos_tipo, dict):
+            raise ValueError(
+                f"{contexto} debe ser un mapeo con las claves 'name' y "
+                f"'description'."
+            )
+        for clave in ("name", "description"):
+            valor = datos_tipo.get(clave)
+            if not isinstance(valor, str) or not valor.strip():
+                raise ValueError(
+                    f"{contexto}: falta la clave '{clave}' o está vacía."
+                )
+
+
+def _validar_estructura_de_combinations(combinations: dict) -> None:
+    for id_estado_limite, lista_combinaciones in combinations.items():
+        contexto_estado = (
+            f"El estado '{id_estado_limite}' de la sección combinations"
+        )
+        if (
+            not isinstance(lista_combinaciones, list)
+            or not lista_combinaciones
+        ):
+            raise ValueError(
+                f"{contexto_estado} debe contener una lista no vacía de "
+                f"combinaciones."
+            )
+        for posicion, combinacion in enumerate(
+            lista_combinaciones, start=1
+        ):
+            _validar_estructura_de_combinacion(
+                combinacion, id_estado_limite, posicion
+            )
+
+
+def _validar_estructura_de_combinacion(
+    combinacion, id_estado_limite: str, posicion: int
+) -> None:
+    contexto = (
+        f"La combinación número {posicion} del estado "
+        f"'{id_estado_limite}'"
+    )
+    if not isinstance(combinacion, dict):
+        raise ValueError(
+            f"{contexto} debe ser un mapeo con las claves 'id' y "
+            f"'factors'."
+        )
+    for clave in ("id", "factors"):
+        if clave not in combinacion:
+            raise ValueError(f"{contexto}: falta la clave '{clave}'.")
+    factors = combinacion["factors"]
+    if not isinstance(factors, dict) or not factors:
+        raise ValueError(
+            f"{contexto}: la clave 'factors' debe ser un mapeo no vacío "
+            f"de tipos de carga a factores."
         )
 
 
@@ -241,33 +357,47 @@ def _validar_nombres_de_combinaciones(combinations: dict) -> None:
                 f"la combinación {combinacion['id']} del estado "
                 f"'{id_estado_limite}'"
             )
-            nombre = _nombre_de_combinacion(combinacion)
-            if "name" in combinacion and combinacion["name"] is not None:
-                if not _es_escalar(combinacion["name"]):
-                    errores.append(
-                        f"La clave 'name' de {ubicacion} debe ser un "
-                        f"texto (ej. \"U3.1\"); se encontró "
-                        f"'{combinacion['name']}'."
-                    )
-                elif nombre is None:
-                    errores.append(
-                        f"La clave 'name' de {ubicacion} está vacía. "
-                        f"Escribí la designación (ej. \"U3.1\") o eliminá "
-                        f"la clave."
-                    )
-                elif nombre in vistos:
-                    errores.append(
-                        f"El nombre '{nombre}' está repetido: lo usan "
-                        f"{vistos[nombre]} y {ubicacion}. Los nombres "
-                        f"deben ser únicos en todo el reglamento."
-                    )
-                else:
-                    vistos[nombre] = ubicacion
+            error = _validar_nombre_de_combinacion(
+                combinacion, ubicacion, vistos
+            )
+            if error:
+                errores.append(error)
     if errores:
         raise ValueError(
             f"Se encontraron {len(errores)} error(es) en los nombres de "
             f"combinaciones:\n" + "\n".join(f"  • {e}" for e in errores)
         )
+
+
+def _validar_nombre_de_combinacion(
+    combinacion: dict, ubicacion: str, vistos: dict[str, str]
+) -> str | None:
+    """
+    Devuelve el mensaje de error si la clave `name` es inválida, o None
+    si es válida (o está ausente). Cuando es válida, registra el nombre
+    en `vistos` para poder detectar repeticiones más adelante.
+    """
+    if "name" not in combinacion or combinacion["name"] is None:
+        return None
+    if not _es_escalar(combinacion["name"]):
+        return (
+            f"La clave 'name' de {ubicacion} debe ser un texto "
+            f"(ej. \"U3.1\"); se encontró '{combinacion['name']}'."
+        )
+    nombre = _nombre_de_combinacion(combinacion)
+    if nombre is None:
+        return (
+            f"La clave 'name' de {ubicacion} está vacía. Escribí la "
+            f"designación (ej. \"U3.1\") o eliminá la clave."
+        )
+    if nombre in vistos:
+        return (
+            f"El nombre '{nombre}' está repetido: lo usan "
+            f"{vistos[nombre]} y {ubicacion}. Los nombres deben ser "
+            f"únicos en todo el reglamento."
+        )
+    vistos[nombre] = ubicacion
+    return None
 
 
 def _nombre_de_combinacion(combinacion: dict) -> str | None:

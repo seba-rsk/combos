@@ -409,3 +409,120 @@ def test_leer_reglamento_seccion_parameters_vacia_falla(tmp_path):
 
     with pytest.raises(ValueError, match="parameters"):
         leer_reglamento(ruta)
+
+
+# ── Estructura de secciones internas ──────────────────────────────────────────
+
+def test_leer_reglamento_metadata_como_lista_falla(tmp_path):
+    yaml_metadata_lista = YAML_VALIDO.replace(
+        'metadata:\n  code_name: "TEST"\n  code_version: "1"\n  '
+        'country: "Testland"\n  description: "Reglamento de prueba"\n',
+        "metadata:\n  - una\n  - lista\n",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_metadata_lista)
+
+    with pytest.raises(ValueError, match="'metadata'"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_combinations_como_lista_falla(tmp_path):
+    yaml_combinations_lista = YAML_VALIDO.replace(
+        "combinations:\n  ELU:", "combinations:\n  - ELU:"
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_combinations_lista)
+
+    with pytest.raises(ValueError, match="'combinations'"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_load_types_como_lista_falla(tmp_path):
+    yaml_load_types_lista = YAML_VALIDO.replace(
+        'load_types:\n  D:\n    name: "Permanente"\n    '
+        'description: "Carga permanente"\n  L:\n    name: "Viva"\n    '
+        'description: "Sobrecarga de uso"\n',
+        "load_types:\n  - D\n  - L\n",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_load_types_lista)
+
+    with pytest.raises(ValueError, match="'load_types'"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_permanent_load_types_como_mapeo_falla(tmp_path):
+    yaml_permanentes_mapeo = YAML_VALIDO.replace(
+        "permanent_load_types:\n  - D\n",
+        "permanent_load_types:\n  D: sí\n",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_permanentes_mapeo)
+
+    with pytest.raises(ValueError, match="'permanent_load_types'"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_limit_state_sin_name_falla(tmp_path):
+    yaml_estado_sin_name = YAML_VALIDO.replace(
+        '  ELU:\n    name: "Estado límite último"\n    prefix: "U"\n',
+        '  ELU:\n    prefix: "U"\n',
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_estado_sin_name)
+
+    with pytest.raises(ValueError, match="'name'"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_load_type_sin_description_falla(tmp_path):
+    yaml_tipo_sin_desc = YAML_VALIDO.replace(
+        '  D:\n    name: "Permanente"\n    description: "Carga permanente"\n',
+        '  D:\n    name: "Permanente"\n',
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_tipo_sin_desc)
+
+    with pytest.raises(ValueError, match="'description'"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_estado_de_combinations_con_valor_no_lista_falla(
+    tmp_path,
+):
+    yaml_estado_mapeo = YAML_VALIDO.replace(
+        "combinations:\n"
+        "  ELU:\n"
+        "    - id: 1\n"
+        "      factors:\n"
+        "        D: 1.4\n"
+        "    - id: 2\n"
+        "      factors:\n"
+        "        D: 1.2\n"
+        "        L: 1.6\n",
+        "combinations:\n"
+        "  ELU:\n"
+        "    id: 1\n"
+        "    factors:\n"
+        "      D: 1.4\n",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_estado_mapeo)
+
+    with pytest.raises(ValueError, match="lista"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_combinacion_sin_factors_falla(tmp_path):
+    yaml_sin_factors = YAML_VALIDO.replace(
+        "    - id: 1\n      factors:\n        D: 1.4\n",
+        "    - id: 1\n",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_sin_factors)
+
+    with pytest.raises(ValueError, match="'factors'"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_combinacion_con_factors_como_lista_falla(tmp_path):
+    yaml_factors_lista = YAML_VALIDO.replace(
+        "      factors:\n        D: 1.4\n",
+        "      factors:\n        - D\n",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_factors_lista)
+
+    with pytest.raises(ValueError, match="'factors'"):
+        leer_reglamento(ruta)
