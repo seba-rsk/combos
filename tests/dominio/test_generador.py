@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from dominio.generador import generar_combinaciones
+from dominio.generador import (
+    contar_combinaciones_previstas,
+    generar_combinaciones,
+)
 
 
 def test_generar_combinaciones_con_todos_los_tipos_presentes_genera_completa(
@@ -114,3 +117,47 @@ def test_generar_combinaciones_sin_estados_devuelve_lista_vacia(
     combinaciones = generar_combinaciones([], reglamento_minimo)
 
     assert combinaciones == []
+
+
+def test_generar_dos_veces_produce_combinaciones_identicas(
+    reglamento_minimo, hacer_estado_simple, hacer_estado_direccional
+):
+    """
+    La generación debe ser determinista: el formato `.combos` guarda los
+    descartes por índice de generación, así que regenerar con los mismos
+    inputs tiene que producir exactamente las mismas combinaciones, en
+    el mismo orden.
+    """
+    estados = [
+        hacer_estado_simple("DEAD", "D"),
+        hacer_estado_simple("SC", "L"),
+        hacer_estado_direccional("Wx", "W", "W-1", signo=1),
+        hacer_estado_direccional("Wy", "W", "W-1", signo=-1),
+    ]
+
+    primera = generar_combinaciones(estados, reglamento_minimo)
+    segunda = generar_combinaciones(estados, reglamento_minimo)
+
+    assert primera == segunda
+
+
+def test_contar_combinaciones_previstas_coincide_con_lo_generado(
+    reglamento_minimo, hacer_estado_simple, hacer_estado_direccional
+):
+    estados = [
+        hacer_estado_simple("DEAD", "D"),
+        hacer_estado_simple("SC", "L"),
+        hacer_estado_direccional("Wx", "W", "W-1", signo=1),
+        hacer_estado_direccional("Wy", "W", "W-1", signo=-1),
+    ]
+
+    previstas = contar_combinaciones_previstas(estados, reglamento_minimo)
+    generadas = generar_combinaciones(estados, reglamento_minimo)
+
+    assert previstas == len(generadas)
+
+
+def test_contar_combinaciones_previstas_sin_estados_da_cero(
+    reglamento_minimo,
+):
+    assert contar_combinaciones_previstas([], reglamento_minimo) == 0

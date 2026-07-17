@@ -34,23 +34,42 @@ def main() -> None:
         raise
 
     except Exception:
-        _escribir_log_error()
-        print("\n" + "=" * 52)
-        print("  Ocurrió un error inesperado en COMBOS.")
-        print(f"  Se guardó un informe en:\n  {LOG_PATH}")
-        print("  Enviá ese archivo para recibir soporte.")
-        print("=" * 52)
+        _mostrar_error_fatal(log_guardado=_escribir_log_error())
         input("\n  Presioná Enter para cerrar...")
         sys.exit(1)
 
 
-def _escribir_log_error() -> None:
+def _escribir_log_error() -> bool:
+    """
+    Intenta registrar el traceback en el log de errores. Devuelve False
+    si el log no se puede escribir (ej. carpeta de solo lectura): en ese
+    caso el error igual se informa en pantalla con el mensaje amable,
+    nunca con el traceback crudo.
+    """
     timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
-    with open(LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(f"\n{'=' * 60}\n")
-        f.write(f"  COMBOS v{VERSION}  —  {timestamp}\n")
-        f.write(f"{'=' * 60}\n")
-        f.write(traceback.format_exc())
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"\n{'=' * 60}\n")
+            f.write(f"  COMBOS v{VERSION}  —  {timestamp}\n")
+            f.write(f"{'=' * 60}\n")
+            f.write(traceback.format_exc())
+        return True
+    except OSError:
+        return False
+
+
+def _mostrar_error_fatal(log_guardado: bool) -> None:
+    """Informa en pantalla un error inesperado, sin jerga técnica."""
+    print("\n" + "=" * 52)
+    print("  Ocurrió un error inesperado en COMBOS.")
+    if log_guardado:
+        print(f"  Se guardó un informe en:\n  {LOG_PATH}")
+        print("  Enviá ese archivo para recibir soporte.")
+    else:
+        print("  No se pudo guardar el informe del error: la carpeta")
+        print("  del programa no permite escribir. Ejecutá COMBOS desde")
+        print("  una carpeta con permisos de escritura y repetí el caso.")
+    print("=" * 52)
 
 
 if __name__ == "__main__":

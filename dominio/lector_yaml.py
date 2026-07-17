@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import yaml
@@ -12,6 +13,13 @@ SECCIONES_OBLIGATORIAS = {
     "permanent_load_types",
 }
 
+CLAVES_METADATA = ("code_name", "code_version", "country", "description")
+
+# Tamaño máximo de un archivo YAML que COMBOS lee completo a memoria.
+# Un reglamento real ocupa unos pocos KB; el límite corta archivos
+# desmedidos antes de cargarlos.
+MAX_BYTES_YAML = 2 * 1024 * 1024
+
 CLAVE_REFERENCIA_PARAMETRO = "param"
 
 
@@ -25,10 +33,68 @@ def leer_reglamento(ruta_yaml: str) -> dict:
                     tipos de carga desconocidos, factores inválidos o una
                     sección `parameters` mal formada.
     """
-    contenido_crudo = _leer_archivo(ruta_yaml)
-    datos = _parsear_yaml(contenido_crudo, ruta_yaml)
+    contenido_crudo = leer_texto_reglamento(ruta_yaml)
+    return leer_reglamento_desde_texto(contenido_crudo, ruta_yaml)
+
+
+def leer_texto_reglamento(ruta_yaml: str) -> str:
+    """
+    Devuelve el contenido de texto del archivo YAML del reglamento, sin
+    parsear ni validar. Se expone aparte para que la sesión conserve el
+    texto original tal como se leyó: el formato `.combos` lo embebe
+    íntegro para poder reproducir el cálculo aunque el archivo externo
+    cambie después.
+
+    Raises:
+        FileNotFoundError: Si el archivo no existe en la ruta indicada.
+    """
+    ruta = Path(ruta_yaml)
+    if not ruta.exists():
+        raise FileNotFoundError(
+            f"No se encontró el archivo de reglamento: '{ruta_yaml}'"
+        )
+    if ruta.stat().st_size > MAX_BYTES_YAML:
+        raise ValueError(
+            f"El archivo de reglamento '{ruta.name}' supera el tamaño "
+            f"máximo admitido ({MAX_BYTES_YAML // (1024 * 1024)} MB). "
+            f"Un reglamento real ocupa unos pocos KB; revisá que sea el "
+            f"archivo correcto."
+        )
+    return ruta.read_text(encoding="utf-8")
+
+
+def contiene_alias_yaml(contenido: str) -> bool:
+    """
+    Detecta si el documento YAML usa alias ('&ancla' / '*alias')
+    recorriendo los eventos del parser, sin construir el documento: la
+    expansión de alias anidados puede crear estructuras gigantes en
+    memoria a partir de un archivo diminuto. Si la sintaxis es inválida
+    devuelve False: ese error lo reporta el parseo normal.
+    """
+    try:
+        return any(
+            isinstance(evento, yaml.AliasEvent)
+            for evento in yaml.parse(contenido)
+        )
+    except yaml.YAMLError:
+        return False
+
+
+def leer_reglamento_desde_texto(contenido: str, origen: str) -> dict:
+    """
+    Parsea y valida el texto YAML de un reglamento y devuelve su
+    contenido validado. `origen` identifica de dónde salió el texto
+    (nombre del archivo) para los mensajes de error.
+
+    Raises:
+        ValueError: Si el YAML tiene sintaxis inválida, secciones faltantes,
+                    tipos de carga desconocidos, factores inválidos o una
+                    sección `parameters` mal formada.
+    """
+    datos = _parsear_yaml(contenido, origen)
     _validar_secciones_obligatorias(datos)
     _validar_estructura_de_secciones(datos)
+    _validar_metadata(datos["metadata"])
     parametros = _validar_y_construir_parametros(datos)
     tipos_de_carga_definidos = set(datos["load_types"].keys())
     _validar_combinaciones(
@@ -46,16 +112,13 @@ def leer_reglamento(ruta_yaml: str) -> dict:
     return _construir_reglamento(datos, parametros)
 
 
-def _leer_archivo(ruta_yaml: str) -> str:
-    ruta = Path(ruta_yaml)
-    if not ruta.exists():
-        raise FileNotFoundError(
-            f"No se encontró el archivo de reglamento: '{ruta_yaml}'"
-        )
-    return ruta.read_text(encoding="utf-8")
-
-
 def _parsear_yaml(contenido: str, ruta_yaml: str) -> dict:
+    if contiene_alias_yaml(contenido):
+        raise ValueError(
+            f"El archivo '{ruta_yaml}' usa anclas y alias de YAML "
+            f"('&' y '*'), que COMBOS no admite. Escribí cada valor de "
+            f"forma explícita."
+        )
     try:
         datos = yaml.safe_load(contenido)
     except yaml.YAMLError as error:
@@ -98,6 +161,15 @@ def _validar_estructura_de_secciones(datos: dict) -> None:
     _exigir_lista_no_vacia(
         "permanent_load_types", datos["permanent_load_types"]
     )
+    _exigir_claves_de_texto("La sección 'limit_states'",
+                            datos["limit_states"])
+    _exigir_claves_de_texto("La sección 'load_types'", datos["load_types"])
+    _validar_ids_de_tipos_de_carga(datos["load_types"])
+    _exigir_claves_de_texto("La sección 'combinations'",
+                            datos["combinations"])
+    _exigir_elementos_de_texto(
+        "permanent_load_types", datos["permanent_load_types"]
+    )
     _validar_estructura_de_limit_states(datos["limit_states"])
     _validar_estructura_de_load_types(datos["load_types"])
     _validar_estructura_de_combinations(datos["combinations"])
@@ -118,6 +190,52 @@ def _exigir_lista_no_vacia(nombre_seccion: str, valor) -> None:
             f"La sección '{nombre_seccion}' debe ser una lista no vacía "
             f"(por ejemplo '- D')."
         )
+
+
+def _exigir_claves_de_texto(descripcion: str, mapeo: dict) -> None:
+    """
+    Los ids de un reglamento (estados límite, tipos de carga,
+    parámetros, claves de factors) deben ser texto. Una clave YAML de
+    otro tipo (ej. `1:` sin comillas) rompería las comparaciones y el
+    ordenamiento de los mensajes aguas abajo con un error técnico.
+    """
+    for clave in mapeo:
+        if not isinstance(clave, str) or not clave.strip():
+            raise ValueError(
+                f"{descripcion} tiene una clave que no es texto: "
+                f"'{clave}'. Escribila entre comillas si es un número "
+                f"(ej. \"{clave}\")."
+            )
+
+
+_PATRON_ID_TIPO_CARGA = re.compile(r"^[A-Za-z0-9_.\-]+$")
+
+
+def _validar_ids_de_tipos_de_carga(load_types: dict) -> None:
+    """
+    Los ids de tipos de carga viajan a la lista desplegable de la
+    plantilla Excel dentro de una fórmula de validación, donde una
+    comilla o una coma romperían la fórmula. Se admiten letras, números,
+    guion, guion bajo y punto — lo que un id real es en la práctica
+    (D, L, Lr, W).
+    """
+    for id_tipo in load_types:
+        if not _PATRON_ID_TIPO_CARGA.match(id_tipo):
+            raise ValueError(
+                f"El id de tipo de carga '{id_tipo}' contiene "
+                f"caracteres no admitidos. Usá solo letras, números, "
+                f"guion, guion bajo o punto (ej. D, Lr, W_x)."
+            )
+
+
+def _exigir_elementos_de_texto(nombre_seccion: str, lista: list) -> None:
+    for elemento in lista:
+        if not isinstance(elemento, str) or not elemento.strip():
+            raise ValueError(
+                f"La sección '{nombre_seccion}' tiene un elemento que "
+                f"no es texto: '{elemento}'. Cada elemento debe ser el "
+                f"id de un tipo de carga (por ejemplo '- D')."
+            )
 
 
 def _validar_estructura_de_limit_states(limit_states: dict) -> None:
@@ -196,6 +314,7 @@ def _validar_estructura_de_combinacion(
             f"{contexto}: la clave 'factors' debe ser un mapeo no vacío "
             f"de tipos de carga a factores."
         )
+    _exigir_claves_de_texto(f"{contexto}: la clave 'factors'", factors)
 
 
 def _validar_combinaciones(
@@ -238,7 +357,7 @@ def _errores_de_factores(
             )
             if error:
                 errores.append(error)
-        elif _es_numero(factor):
+        elif es_numero(factor):
             if factor <= 0:
                 errores.append(
                     f"{contexto}: el factor del tipo de carga "
@@ -262,11 +381,12 @@ def _error_de_referencia_a_parametro(
     ids_parametros: set,
 ) -> str | None:
     if set(referencia.keys()) != {CLAVE_REFERENCIA_PARAMETRO}:
+        claves = sorted(str(clave) for clave in referencia.keys())
         return (
             f"{contexto}: la referencia a parámetro del tipo de carga "
             f"'{tipo_carga}' no tiene la forma esperada "
             f"{{ {CLAVE_REFERENCIA_PARAMETRO}: <id> }}. "
-            f"Claves encontradas: {sorted(referencia.keys())}."
+            f"Claves encontradas: {claves}."
         )
     id_parametro = referencia[CLAVE_REFERENCIA_PARAMETRO]
     if id_parametro not in ids_parametros:
@@ -298,7 +418,8 @@ def _validar_parametros_referenciados(
         )
 
 
-def _es_numero(valor) -> bool:
+def es_numero(valor) -> bool:
+    """Devuelve True si el valor es un número real (excluye bool)."""
     return isinstance(valor, (int, float)) and not isinstance(valor, bool)
 
 
@@ -343,8 +464,11 @@ def _id_entero(valor) -> int | None:
         return valor
     if isinstance(valor, float) and valor.is_integer():
         return int(valor)
-    if isinstance(valor, str) and valor.strip().lstrip("-").isdigit():
-        return int(valor.strip())
+    if isinstance(valor, str):
+        try:
+            return int(valor.strip())
+        except ValueError:
+            return None
     return None
 
 
@@ -417,7 +541,7 @@ def _nombre_de_combinacion(combinacion: dict) -> str | None:
 
 
 def _es_escalar(valor) -> bool:
-    return isinstance(valor, str) or _es_numero(valor)
+    return isinstance(valor, str) or es_numero(valor)
 
 
 def _validar_tipos_permanentes(
@@ -478,6 +602,7 @@ def _validar_y_construir_parametros(
             "al menos un parámetro, o eliminarse si el reglamento no "
             "usa parámetros."
         )
+    _exigir_claves_de_texto("La sección 'parameters'", parameters)
     return {
         id_parametro: _construir_parametro(id_parametro, definicion)
         for id_parametro, definicion in parameters.items()
@@ -527,7 +652,7 @@ def _construir_opciones(options, contexto: str) -> list[OpcionParametro]:
                 f"{contexto}, opción {numero}: falta la clave 'label' o "
                 f"está vacía. Es el texto que describe la opción."
             )
-        if not _es_numero(valor) or valor <= 0:
+        if not es_numero(valor) or valor <= 0:
             raise ValueError(
                 f"{contexto}, opción {numero}: la clave 'value' debe ser "
                 f"un número mayor que cero (se encontró '{valor}')."
@@ -542,13 +667,37 @@ def _validar_default(
     default, opciones: list[OpcionParametro], contexto: str
 ) -> float:
     valores = [opcion.valor for opcion in opciones]
-    if not _es_numero(default) or float(default) not in valores:
+    if not es_numero(default) or float(default) not in valores:
         raise ValueError(
             f"{contexto}: la clave 'default' debe coincidir con el "
             f"'value' de una de las opciones ({valores}); se encontró "
             f"'{default}'."
         )
     return float(default)
+
+
+def _validar_metadata(metadata: dict) -> None:
+    """
+    Verifica que la sección metadata tenga las cuatro claves que
+    identifican el reglamento y que sus valores sean escalares no
+    vacíos. Al construir el reglamento se convierten siempre a texto,
+    así aguas abajo (pantalla, Excel, sesiones `.combos`) nunca aparece
+    un valor de otro tipo.
+    """
+    faltantes = [clave for clave in CLAVES_METADATA if clave not in metadata]
+    if faltantes:
+        raise ValueError(
+            f"La sección metadata está incompleta. Claves faltantes: "
+            f"{faltantes}. Tomá como referencia "
+            f"profiles/ejemplo_reglamento.yaml."
+        )
+    for clave in CLAVES_METADATA:
+        valor = metadata[clave]
+        if not _es_escalar(valor) or not str(valor).strip():
+            raise ValueError(
+                f"La clave '{clave}' de la sección metadata debe ser un "
+                f"texto o número no vacío; se encontró '{valor}'."
+            )
 
 
 def _construir_reglamento(
@@ -566,10 +715,7 @@ def _construir_reglamento(
 
 def _construir_metadata(metadata: dict) -> dict:
     return {
-        "code_name": metadata["code_name"],
-        "code_version": metadata["code_version"],
-        "country": metadata["country"],
-        "description": metadata["description"],
+        clave: str(metadata[clave]).strip() for clave in CLAVES_METADATA
     }
 
 

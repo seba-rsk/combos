@@ -14,7 +14,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from dominio.duplicados import marcar_duplicadas
-from dominio.generador import generar_combinaciones
+from dominio.generador import (
+    contar_combinaciones_previstas,
+    generar_combinaciones,
+)
 from dominio.modelos import (
     Combinacion,
     EleccionParametro,
@@ -22,6 +25,31 @@ from dominio.modelos import (
     EstadoCrudo,
 )
 from dominio.preponderancia import marcar_superadas
+
+# Tope de combinaciones que una corrida puede generar. Las variantes de
+# los grupos direccionales se multiplican entre sí, así que una entrada
+# desmedida (una planilla propia o un archivo .combos de terceros) puede
+# crecer a millones y colgar la máquina. El uso real está en el orden de
+# los cientos; el límite deja margen de sobra.
+LIMITE_COMBINACIONES = 10_000
+
+
+class ErrorLimiteCombinaciones(Exception):
+    """La entrada genera más combinaciones de las que COMBOS procesa."""
+
+    def __init__(self, cantidad: int) -> None:
+        self.cantidad = cantidad
+        super().__init__(
+            f"La entrada genera {_formato_miles(cantidad)} combinaciones "
+            f"y el máximo que COMBOS procesa es "
+            f"{_formato_miles(LIMITE_COMBINACIONES)}. Revisá la cantidad "
+            f"de estados direccionales y de grupos: las variantes se "
+            f"multiplican entre sí."
+        )
+
+
+def _formato_miles(numero: int) -> str:
+    return f"{numero:,}".replace(",", ".")
 
 
 @dataclass
@@ -32,15 +60,18 @@ class Sesion:
     parámetros, estados al leer y validar la planilla, y combinaciones
     al procesar.
 
-    El reglamento se guarda en dos formas: `reglamento_crudo` es el YAML
-    original tal como se cargó (con las referencias `{param: X}` en los
-    factores que dependen de un parámetro) y `reglamento` es el resuelto
-    (con los factores ya numéricos). Todo el pipeline consume el
-    resuelto; el crudo se conserva para poder regenerar el resuelto ante
-    un cambio de elecciones y para poder persistir la sesión con
-    trazabilidad completa hacia adelante (formato `.combos`).
+    El reglamento se guarda en tres formas: `reglamento_texto` es el
+    texto YAML original tal como se leyó del archivo (el formato
+    `.combos` lo embebe íntegro), `reglamento_crudo` es su contenido
+    validado (con las referencias `{param: X}` en los factores que
+    dependen de un parámetro) y `reglamento` es el resuelto (con los
+    factores ya numéricos). Todo el pipeline consume el resuelto; el
+    crudo se conserva para poder regenerar el resuelto ante un cambio
+    de elecciones y para poder persistir la sesión con trazabilidad
+    completa hacia adelante (formato `.combos`).
     """
 
+    reglamento_texto: str | None = None
     reglamento_crudo: dict | None = None
     reglamento: dict | None = None
     nombre_perfil: str | None = None
@@ -59,11 +90,20 @@ def procesar(sesion: Sesion) -> None:
 
     Raises:
         ValueError: Si la sesión no tiene reglamento cargado.
+        ErrorLimiteCombinaciones: Si la entrada generaría más
+            combinaciones que LIMITE_COMBINACIONES (el chequeo corre
+            antes de generar nada, así una entrada desmedida no llega
+            a consumir memoria ni tiempo).
     """
     if sesion.reglamento is None:
         raise ValueError(
             "La sesión no tiene reglamento cargado; no se puede procesar."
         )
+    cantidad_prevista = contar_combinaciones_previstas(
+        sesion.estados, sesion.reglamento
+    )
+    if cantidad_prevista > LIMITE_COMBINACIONES:
+        raise ErrorLimiteCombinaciones(cantidad_prevista)
     combinaciones = generar_combinaciones(sesion.estados, sesion.reglamento)
     combinaciones = marcar_duplicadas(combinaciones)
     combinaciones = marcar_superadas(

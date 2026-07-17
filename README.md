@@ -45,6 +45,7 @@ COMBOS lee un reglamento de cargas desde un archivo YAML, procesa una planilla E
 - Generación de envolventes por estado límite incluida en la exportación.
 - Compatible con SAP2000. Extensible a otros softwares mediante archivos YAML de exportación.
 - Reglamentos intercambiables: incluye CIRSOC 2005 y soporte para agregar los propios.
+- Sesiones guardables: el trabajo se guarda como archivo `.combos` (JSON) y se retoma después con las combinaciones regeneradas y las decisiones intactas.
 - Interfaz de línea de comandos guiada paso a paso. Funciona en Windows sin instalación adicional.
 
 ---
@@ -96,6 +97,10 @@ COMBOS guía al usuario paso a paso a través de la interfaz de línea de comand
 
 ### Flujo de trabajo
 
+**Paso 0 — Inicio: sesión nueva o abrir una guardada**
+
+COMBOS pregunta si querés empezar una sesión nueva (Enter) o abrir una sesión guardada previamente como archivo `.combos`. Al abrir una sesión guardada se restauran el reglamento, los estados de carga, las elecciones de parámetros y los descartes tal como quedaron, las combinaciones se regeneran, y el flujo salta directo al resumen (paso 7) para exportar.
+
 **Paso 1 — Selección del reglamento**
 
 COMBOS lista los perfiles YAML disponibles en la carpeta `profiles/`. Elegís el reglamento que corresponde a tu proyecto.
@@ -127,6 +132,10 @@ COMBOS muestra en pantalla las combinaciones resultantes con sus componentes, es
 **Paso 8 — Exportación**
 
 Seleccionás el perfil de exportación y la ruta de destino. COMBOS genera el archivo Excel de salida.
+
+**Paso 9 — Guardar la sesión (opcional)**
+
+Antes de cerrar, COMBOS ofrece guardar la sesión como archivo `.combos` para retomarla más adelante. El archivo guarda tus datos y decisiones (estados de carga, elecciones de parámetros, descartes) y una copia del reglamento usado — nunca resultados calculados: al abrirlo, las combinaciones se regeneran desde cero, así el resultado siempre es reproducible aunque el YAML del reglamento cambie después. Es un archivo JSON de texto plano, sin código ejecutable, seguro para compartir entre colegas.
 
 ---
 
@@ -307,6 +316,7 @@ combos/
 ├── dominio/
 │   ├── modelos.py                # Objetos de dominio (dataclasses) que circulan por el pipeline
 │   ├── sesion.py                 # Estado de una corrida (Sesion) y operaciones del pipeline
+│   ├── persistencia_sesion.py    # Conversión Sesion ⇄ datos del formato .combos y reconstrucción validada
 │   ├── generador.py              # Generación de combinaciones de carga
 │   ├── duplicados.py             # Detección y marcado de combinaciones duplicadas
 │   ├── envolventes.py            # Generación de envolventes
@@ -321,6 +331,7 @@ combos/
 │   ├── sanitizacion_excel.py     # Neutralización de texto libre antes de escribirlo en Excel
 │   ├── encabezado_excel.py       # Bloque de encabezado compartido por resumen y plantilla
 │   ├── guardado_excel.py         # Guardado atómico de los archivos Excel generados
+│   ├── archivo_combos.py         # Lectura y escritura atómica de archivos de sesión .combos
 │   ├── exportador.py             # Generación del archivo Excel de salida
 │   ├── generador_plantilla.py    # Generación de la planilla Excel en blanco para el usuario
 │   ├── lector_excel.py           # Lectura de la planilla Excel completada por el usuario
@@ -496,6 +507,12 @@ Todas las combinaciones del reglamento deben incluir al menos un tipo de carga p
 
 **"Tipos de carga no definidos en load_types"**
 Alguna combinación usa un tipo de carga (por ejemplo `W`) que no está declarado en la sección `load_types` del YAML.
+
+**"No se pudo abrir 'X.combos': el archivo está dañado o no es una sesión de COMBOS"**
+El archivo de sesión se editó a mano, se cortó al copiarse o no fue generado por COMBOS. Volvé a guardar la sesión desde el programa o pedí una copia nueva a quien te la compartió.
+
+**"La sesión se guardó con una versión más nueva de COMBOS"**
+El archivo `.combos` fue creado por una versión de COMBOS más reciente que la tuya. Actualizá COMBOS para abrirlo.
 
 **El software falla con un error inesperado**
 COMBOS genera automáticamente un archivo de log en la carpeta de instalación. Enviá ese archivo al reportar el problema.

@@ -47,6 +47,37 @@ def generar_combinaciones(
     return combinaciones
 
 
+def contar_combinaciones_previstas(
+    estados: list[Estado], reglamento: dict
+) -> int:
+    """
+    Calcula cuántas combinaciones produciría generar_combinaciones con
+    estos estados y reglamento, sin construir ninguna. Permite rechazar
+    una entrada desmedida (propia o de un archivo de terceros) antes de
+    pagar el costo de generarla: el producto cartesiano de los grupos
+    direccionales crece multiplicativamente.
+    """
+    total = 0
+    for lista_combinaciones_base in reglamento["combinations"].values():
+        for combinacion_base in lista_combinaciones_base:
+            total += _contar_variantes_de_base(estados, combinacion_base)
+    return total
+
+
+def _contar_variantes_de_base(
+    estados: list[Estado], combinacion_base: dict
+) -> int:
+    factores = combinacion_base["factors"]
+    estados_simples = _filtrar_estados_simples(estados, factores)
+    grupos = _agrupar_estados_direccionales_por_nombre(estados, factores)
+    if not estados_simples and not grupos:
+        return 0
+    variantes = 1
+    for opciones in grupos.values():
+        variantes *= len(opciones)
+    return variantes
+
+
 # ── Iteración de variantes ────────────────────────────────────────────────────
 
 def _iterar_variantes_de_componentes(

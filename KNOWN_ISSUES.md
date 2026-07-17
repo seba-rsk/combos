@@ -4,6 +4,21 @@ Este archivo documenta limitaciones conocidas del software en su versión actual
 
 ---
 
+## Al abrir una sesión guardada no se pueden revisar los descartes
+
+**Versión afectada:** próxima release (formato `.combos`)
+**Planificado para:** GUI (ítem 5 del plan de mejoras)
+
+### Descripción
+
+Al abrir un archivo `.combos`, la sesión se restaura con los descartes de combinaciones superadas tal como quedaron al guardar, y el flujo salta directo al resumen. La CLI no vuelve a ofrecer el paso de resolución de superadas: las decisiones guardadas se consideran tomadas.
+
+### Comportamiento esperado
+
+Si querés cambiar qué combinaciones superadas descartar, empezá una sesión nueva con la misma planilla Excel. La revisión interactiva de decisiones sobre una sesión abierta está planificada para la interfaz gráfica.
+
+---
+
 ## Sistema de log limitado al flujo principal
 
 **Versión afectada:** 1.0.0

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime
 from pathlib import Path
 
 from rich import box
@@ -23,6 +24,7 @@ from dominio.modelos import (
     EleccionParametro,
     ParametroReglamento,
 )
+from dominio.sesion import Sesion
 
 console = Console()
 
@@ -60,6 +62,69 @@ def mostrar_separador(titulo: str) -> None:
     console.print(Rule(title=titulo, style="grey50", align="left"))
 
 
+# ── Inicio y sesiones guardadas ───────────────────────────────────────────────
+
+def mostrar_menu_inicio() -> None:
+    """Muestra las opciones de la pantalla de inicio del flujo."""
+    console.print()
+    console.print("  [bold]¿Qué querés hacer?[/bold]")
+    console.print()
+    console.print("    [dim]1.[/dim]  Empezar una sesión nueva")
+    console.print("    [dim]2.[/dim]  Abrir una sesión guardada (.combos)")
+    console.print()
+
+
+def mostrar_resumen_restauracion(
+    sesion: Sesion,
+    nombre_archivo: str,
+    fecha_guardado: str,
+    version_combos: str,
+) -> None:
+    """
+    Resume qué se restauró al abrir una sesión guardada: origen y fecha
+    del archivo, reglamento, estados de carga, elecciones de parámetros
+    y combinaciones regeneradas con sus descartes reaplicados.
+    """
+    mostrar_exito(f"Sesión abierta: {nombre_archivo}")
+    mostrar_info(
+        f"[dim]Guardada el {_formatear_fecha_guardado(fecha_guardado)} "
+        f"con COMBOS v{escape(version_combos)}.[/dim]"
+    )
+    nombre_reglamento = sesion.reglamento["metadata"]["code_name"]
+    mostrar_info(
+        f"Reglamento: [bold]{escape(nombre_reglamento)}[/bold] "
+        f"[dim]({escape(sesion.nombre_perfil)})[/dim]"
+    )
+    mostrar_info(
+        f"Estados de carga: [bold]{len(sesion.estados_crudos)}[/bold]"
+    )
+    for eleccion in sesion.elecciones:
+        mostrar_info(
+            f"Parámetro — {escape(eleccion.nombre)}: {eleccion.valor} "
+            f"[dim]({escape(eleccion.etiqueta)})[/dim]"
+        )
+    descartes = sum(
+        1 for c in sesion.combinaciones if c.descartada_por_usuario
+    )
+    mostrar_info(
+        f"Combinaciones regeneradas: "
+        f"[bold]{len(sesion.combinaciones)}[/bold] — "
+        f"descartes reaplicados: [bold]{descartes}[/bold]"
+    )
+
+
+def _formatear_fecha_guardado(fecha_iso: str) -> str:
+    """
+    Convierte la fecha ISO guardada en el archivo a dd/mm/aaaa. Si el
+    texto no es una fecha válida, lo devuelve tal cual: la fecha es
+    informativa y no justifica rechazar la sesión.
+    """
+    try:
+        return datetime.fromisoformat(fecha_iso).strftime("%d/%m/%Y")
+    except ValueError:
+        return escape(fecha_iso)
+
+
 # ── Mensajes de estado ────────────────────────────────────────────────────────
 #
 # Política de escape de markup: los mensajes que interpolan texto libre
@@ -85,7 +150,7 @@ def mostrar_advertencia(mensaje: str) -> None:
 
 
 def mostrar_error(mensaje: str) -> None:
-    """Muestra un error fatal antes de terminar el programa."""
+    """Muestra el error de una operación que no pudo completarse."""
     console.print()
     console.print(f"  [bold red]Error:[/bold red] {escape(mensaje)}")
     console.print()
@@ -249,63 +314,72 @@ def mostrar_tabla_superadas(
         f"  [bold]Combinaciones superadas por preponderancia:[/bold]  "
         f"[yellow]{len(superadas)}[/yellow]"
     )
-
-    por_estado_limite: dict[str, list[Combinacion]] = {}
-    for combinacion in superadas:
-        estado = combinacion.estado_limite
-        if estado not in por_estado_limite:
-            por_estado_limite[estado] = []
-        por_estado_limite[estado].append(combinacion)
-
-    for estado_limite, grupo in por_estado_limite.items():
-        console.print()
-        console.print(
-            f"  [grey50]{escape(estado_limite)} "
-            f"{'─' * ANCHO_SEPARADOR_ESTADO}[/grey50]"
+    for estado_limite, grupo in _agrupar_por_estado_limite(superadas).items():
+        _mostrar_grupo_de_superadas(
+            estado_limite, grupo, indice_por_generacion
         )
 
-        por_dominante: dict[int, list[Combinacion]] = {}
-        for combinacion in grupo:
-            dominante_id = combinacion.superada_por
-            if dominante_id not in por_dominante:
-                por_dominante[dominante_id] = []
-            por_dominante[dominante_id].append(combinacion)
 
-        filas_mostradas = 0
-        for dominante_id, superadas_por_esta in sorted(por_dominante.items()):
-            dominante = indice_por_generacion.get(dominante_id)
-            componentes_dominante = (
-                formatear_componentes(dominante.componentes)
-                if dominante else "?"
-            )
+def _mostrar_grupo_de_superadas(
+    estado_limite: str,
+    grupo: list[Combinacion],
+    indice_por_generacion: dict[int, Combinacion],
+) -> None:
+    console.print()
+    console.print(
+        f"  [grey50]{escape(estado_limite)} "
+        f"{'─' * ANCHO_SEPARADOR_ESTADO}[/grey50]"
+    )
+    por_dominante = _agrupar_por_dominante(grupo)
+    filas_mostradas = 0
+    for dominante_id, superadas_por_esta in sorted(por_dominante.items()):
+        console.print(_construir_tabla_dominante(
+            dominante_id, superadas_por_esta, indice_por_generacion
+        ))
+        filas_mostradas += 1 + len(superadas_por_esta)
+        if filas_mostradas >= FILAS_POR_PAGINA:
+            pedir_enter("Presioná Enter para ver más...")
+            filas_mostradas = 0
 
-            tabla = Table(
-                box=box.SIMPLE,
-                show_header=False,
-                padding=(0, 1),
-                show_edge=False,
-            )
-            tabla.add_column(style="dim white", no_wrap=True)
-            tabla.add_column(style="white")
 
-            tabla.add_row(
-                Text(f"superada por  #{dominante_id}", style="dim"),
-                Text(componentes_dominante, style="bold cyan"),
-            )
+def _agrupar_por_dominante(
+    grupo: list[Combinacion],
+) -> dict[int, list[Combinacion]]:
+    por_dominante: dict[int, list[Combinacion]] = {}
+    for combinacion in grupo:
+        por_dominante.setdefault(combinacion.superada_por, []).append(
+            combinacion
+        )
+    return por_dominante
 
-            for combinacion in superadas_por_esta:
-                indice = combinacion.indice_generacion
-                componentes = formatear_componentes(combinacion.componentes)
-                tabla.add_row(
-                    Text(f"  #{indice}", style="yellow"),
-                    Text(componentes),
-                )
 
-            console.print(tabla)
-            filas_mostradas += 1 + len(superadas_por_esta)
-            if filas_mostradas >= FILAS_POR_PAGINA:
-                pedir_enter("Presione Enter para ver más...")
-                filas_mostradas = 0
+def _construir_tabla_dominante(
+    dominante_id: int,
+    superadas_por_esta: list[Combinacion],
+    indice_por_generacion: dict[int, Combinacion],
+) -> Table:
+    dominante = indice_por_generacion.get(dominante_id)
+    componentes_dominante = (
+        formatear_componentes(dominante.componentes) if dominante else "?"
+    )
+    tabla = Table(
+        box=box.SIMPLE,
+        show_header=False,
+        padding=(0, 1),
+        show_edge=False,
+    )
+    tabla.add_column(style="dim white", no_wrap=True)
+    tabla.add_column(style="white")
+    tabla.add_row(
+        Text(f"superada por  #{dominante_id}", style="dim"),
+        Text(componentes_dominante, style="bold cyan"),
+    )
+    for combinacion in superadas_por_esta:
+        tabla.add_row(
+            Text(f"  #{combinacion.indice_generacion}", style="yellow"),
+            Text(formatear_componentes(combinacion.componentes)),
+        )
+    return tabla
 
 
 # ── Ayuda para input de descarte ──────────────────────────────────────────────
@@ -373,7 +447,7 @@ def mostrar_tabla_resumen(resultantes: list[Combinacion]) -> None:
     for estado_limite, grupo in _agrupar_por_estado_limite(resultantes).items():
         _mostrar_grupo_de_estado_limite(estado_limite, grupo)
     console.print()
-    pedir_enter("Presione Enter para continuar con la exportación:")
+    pedir_enter("Presioná Enter para continuar con la exportación:")
 
 
 def _agrupar_por_estado_limite(
@@ -398,7 +472,7 @@ def _mostrar_grupo_de_estado_limite(
             grupo[inicio:inicio + FILAS_POR_PAGINA]
         ))
         if inicio + FILAS_POR_PAGINA < len(grupo):
-            pedir_enter("Presione Enter para ver más...")
+            pedir_enter("Presioná Enter para ver más...")
 
 
 def _construir_tabla_pagina(pagina: list[Combinacion]) -> Table:

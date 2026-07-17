@@ -526,3 +526,141 @@ def test_leer_reglamento_combinacion_con_factors_como_lista_falla(tmp_path):
 
     with pytest.raises(ValueError, match="'factors'"):
         leer_reglamento(ruta)
+
+
+# ── Metadata ──────────────────────────────────────────────────────────────────
+
+def test_leer_reglamento_metadata_sin_clave_obligatoria_falla(tmp_path):
+    yaml_sin_country = YAML_VALIDO.replace('  country: "Testland"\n', "")
+    ruta = _escribir_yaml(tmp_path, yaml_sin_country)
+
+    with pytest.raises(ValueError, match="metadata"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_metadata_con_valor_no_escalar_falla(tmp_path):
+    yaml_con_lista = YAML_VALIDO.replace(
+        '  code_name: "TEST"', "  code_name: [2005, 2024]"
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_con_lista)
+
+    with pytest.raises(ValueError, match="code_name"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_metadata_numerica_se_convierte_a_texto(tmp_path):
+    """
+    Un code_name numérico (ej. 2005 sin comillas) es YAML legítimo:
+    aguas abajo (pantalla, Excel, sesiones .combos) siempre debe llegar
+    como texto para que ningún consumidor falle por el tipo.
+    """
+    yaml_numerico = YAML_VALIDO.replace(
+        '  code_name: "TEST"', "  code_name: 2005"
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_numerico)
+
+    reglamento = leer_reglamento(ruta)
+
+    assert reglamento["metadata"]["code_name"] == "2005"
+
+
+# ── Ids que no son texto ──────────────────────────────────────────────────────
+# YAML admite claves de cualquier tipo (`1:` sin comillas es un entero);
+# los ids del reglamento deben ser texto para que las comparaciones y
+# los mensajes aguas abajo nunca fallen con un error técnico.
+
+def test_leer_reglamento_factors_con_clave_numerica_falla(tmp_path):
+    yaml_clave_numerica = YAML_VALIDO.replace(
+        "      factors:\n        D: 1.4\n",
+        "      factors:\n        D: 1.4\n        1: 9.9\n",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_clave_numerica)
+
+    with pytest.raises(ValueError, match="comillas"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_load_types_con_clave_numerica_falla(tmp_path):
+    yaml_clave_numerica = YAML_VALIDO.replace(
+        "load_types:\n  D:\n",
+        "load_types:\n  2:\n    name: \"Rara\"\n"
+        "    description: \"Clave numérica\"\n  D:\n",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_clave_numerica)
+
+    with pytest.raises(ValueError, match="comillas"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_permanentes_con_elemento_no_textual_falla(
+    tmp_path,
+):
+    yaml_elemento_raro = YAML_VALIDO.replace(
+        "permanent_load_types:\n  - D\n",
+        "permanent_load_types:\n  - D\n  - {x: 1}\n",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_elemento_raro)
+
+    with pytest.raises(ValueError, match="permanent_load_types"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_referencia_con_claves_mixtas_da_error_claro(
+    tmp_path,
+):
+    yaml_referencia_rara = YAML_CON_PARAMETROS.replace(
+        "        L: { param: L_factor }",
+        "        L: { param: L_factor, 1: 2 }",
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_referencia_rara)
+
+    with pytest.raises(ValueError, match="forma esperada"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_parameters_con_clave_numerica_falla(tmp_path):
+    yaml_parametro_numerico = YAML_CON_PARAMETROS.replace(
+        "parameters:\n  L_factor:", "parameters:\n  7:"
+    ).replace("{ param: L_factor }", "{ param: 7 }")
+    ruta = _escribir_yaml(tmp_path, yaml_parametro_numerico)
+
+    with pytest.raises(ValueError, match="comillas"):
+        leer_reglamento(ruta)
+
+
+# ── Protecciones contra archivos desmedidos u hostiles ────────────────────────
+
+def test_leer_reglamento_con_alias_yaml_falla(tmp_path):
+    ruta = _escribir_yaml(
+        tmp_path, "ancla: &a [1]\notra: *a\n" + YAML_VALIDO
+    )
+
+    with pytest.raises(ValueError, match="alias"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_archivo_gigante_falla(tmp_path, monkeypatch):
+    import dominio.lector_yaml as modulo_lector
+    monkeypatch.setattr(modulo_lector, "MAX_BYTES_YAML", 10)
+    ruta = _escribir_yaml(tmp_path, YAML_VALIDO)
+
+    with pytest.raises(ValueError, match="tamaño"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_id_con_doble_guion_da_error_claro(tmp_path):
+    yaml_id_raro = YAML_VALIDO.replace("- id: 2", '- id: "--3"')
+    ruta = _escribir_yaml(tmp_path, yaml_id_raro)
+
+    with pytest.raises(ValueError, match="entero"):
+        leer_reglamento(ruta)
+
+
+def test_leer_reglamento_id_de_tipo_con_caracteres_raros_falla(tmp_path):
+    yaml_tipo_raro = YAML_VALIDO.replace(
+        "load_types:\n  D:\n", 'load_types:\n  "D,X":\n'
+    )
+    ruta = _escribir_yaml(tmp_path, yaml_tipo_raro)
+
+    with pytest.raises(ValueError, match="caracteres no admitidos"):
+        leer_reglamento(ruta)

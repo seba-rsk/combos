@@ -218,7 +218,7 @@ def _aplicar_validacion_entero_positivo(
     filas_datos: int,
 ) -> None:
     mensaje_error = (
-        columna.get("mensaje_error") or "Ingrese un número entero positivo."
+        columna.get("mensaje_error") or "Ingresá un número entero positivo."
     )
 
     validacion = DataValidation(

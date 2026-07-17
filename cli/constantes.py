@@ -6,10 +6,12 @@ NOMBRE_CARPETA_ESCRITORIO = "Desktop"
 # Prefijos de los nombres de archivo que propone COMBOS por defecto.
 PREFIJO_PLANTILLA = "Input_COMBOS_"
 PREFIJO_EXPORTACION = "Output_COMBOS_"
+PREFIJO_SESION = "Sesion_COMBOS_"
 
 # Extensiones de archivo que maneja la interfaz.
 EXTENSION_EXCEL = ".xlsx"
 EXTENSION_YAML = ".yaml"
+EXTENSION_COMBOS = ".combos"
 
 # Formato de fecha usado en los nombres de archivo por defecto, para que
 # corridas sucesivas no propongan siempre el mismo nombre.

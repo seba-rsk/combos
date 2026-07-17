@@ -8,6 +8,7 @@ from pathlib import Path
 from tkinter import filedialog
 
 import yaml
+from rich.markup import escape
 
 from cli.consola import (
     mostrar_advertencia,
@@ -21,8 +22,10 @@ from cli.consola import (
     mostrar_exito,
     mostrar_info,
     mostrar_lista_archivos,
+    mostrar_menu_inicio,
     mostrar_menu_parametro,
     mostrar_procesando,
+    mostrar_resumen_restauracion,
     mostrar_separador,
     mostrar_tabla_resumen,
     mostrar_tabla_superadas,
@@ -32,6 +35,7 @@ from cli.consola import (
     pedir_seleccion_de_archivo,
 )
 from cli.constantes import (
+    EXTENSION_COMBOS,
     EXTENSION_EXCEL,
     EXTENSION_YAML,
     FORMATO_FECHA_ARCHIVO,
@@ -39,9 +43,15 @@ from cli.constantes import (
     NOMBRE_CARPETA_ESCRITORIO,
     PREFIJO_EXPORTACION,
     PREFIJO_PLANTILLA,
+    PREFIJO_SESION,
 )
 from dominio.lector_plantilla import ErrorValidacionPlantilla, leer_plantilla
-from dominio.lector_yaml import leer_reglamento
+from dominio.lector_yaml import (
+    MAX_BYTES_YAML,
+    contiene_alias_yaml,
+    leer_reglamento_desde_texto,
+    leer_texto_reglamento,
+)
 from dominio.modelos import (
     Combinacion,
     EleccionParametro,
@@ -55,12 +65,23 @@ from dominio.parametros import (
     resolver_parametros,
     tipos_de_carga_que_referencian,
 )
+from dominio.persistencia_sesion import (
+    ErrorSesionInvalida,
+    sesion_a_datos,
+    sesion_desde_datos,
+)
 from dominio.sesion import (
+    ErrorLimiteCombinaciones,
     Sesion,
     aplicar_descartes,
     combinaciones_resultantes,
     combinaciones_superadas,
     procesar,
+)
+from infraestructura.archivo_combos import (
+    ErrorArchivoCombos,
+    guardar_combos,
+    leer_combos,
 )
 from infraestructura.config_interna import CONFIG_PLANTILLA, CONFIG_RESUMEN
 from infraestructura.exportador import exportar
@@ -83,37 +104,143 @@ from version import VERSION
 def ejecutar_flujo() -> None:
     """
     Orquesta el flujo completo de COMBOS sobre una única Sesion:
-    reglamento → plantilla → lectura y validación de estados →
-    parámetros → procesamiento → superadas → resumen → exportación.
-    Cada paso completa la sesión; la lógica vive en dominio.sesion.
+    inicio (sesión nueva o abrir un `.combos`) → reglamento → plantilla
+    → lectura y validación de estados → parámetros → procesamiento →
+    superadas → resumen → exportación → guardado opcional de la sesión.
+    Cada paso completa la sesión; la lógica vive en dominio.
     """
     mostrar_bienvenida(VERSION)
 
-    sesion = Sesion()
+    sesion = _paso_inicio()
 
-    _paso_cargar_reglamento(sesion)
-
-    _paso_generar_plantilla_si_el_usuario_lo_desea(sesion)
-
-    _paso_leer_excel_del_usuario(sesion)
-
-    _paso_validar_plantilla(sesion)
-
-    _paso_resolver_parametros(sesion)
-
-    _paso_procesar(sesion)
-
-    _paso_resolver_combinaciones_superadas(sesion)
+    if sesion is None:
+        sesion = Sesion()
+        _paso_cargar_reglamento(sesion)
+        _paso_generar_plantilla_si_el_usuario_lo_desea(sesion)
+        _paso_leer_excel_del_usuario(sesion)
+        _paso_validar_plantilla(sesion)
+        _paso_resolver_parametros(sesion)
+        _paso_procesar(sesion)
+        _paso_resolver_combinaciones_superadas(sesion)
 
     _paso_mostrar_resumen(sesion)
 
     if not combinaciones_resultantes(sesion):
         if not _confirmar_continuar_sin_combinaciones():
+            _paso_guardar_sesion(sesion)
             mostrar_info("Operación finalizada sin exportar.")
             pedir_enter("Presioná Enter para cerrar COMBOS...")
             return
 
     _paso_exportar(sesion)
+
+    _paso_guardar_sesion(sesion)
+    pedir_enter("Presioná Enter para cerrar COMBOS...")
+
+
+# ── Paso 1: inicio ────────────────────────────────────────────────────────────
+
+def _paso_inicio() -> Sesion | None:
+    """
+    Pregunta si se empieza una sesión nueva o se abre una guardada.
+    Devuelve la sesión reconstruida si se abrió un archivo `.combos`,
+    o None para seguir con el flujo de sesión nueva. Si un archivo no
+    se puede abrir, informa el problema y vuelve a ofrecer el menú.
+    """
+    while True:
+        mostrar_separador("Inicio")
+        mostrar_menu_inicio()
+        if _pedir_opcion_inicio() == 1:
+            return None
+        sesion = _abrir_sesion_guardada()
+        if sesion is not None:
+            return sesion
+
+
+def _pedir_opcion_inicio() -> int:
+    while True:
+        entrada = pedir_input(
+            "Elegí una opción (1-2) [Enter = 1]:"
+        ).strip()
+        if entrada == "":
+            return 1
+        if entrada in ("1", "2"):
+            return int(entrada)
+        mostrar_advertencia(
+            "Ingresá 1, 2 o Enter para empezar una sesión nueva."
+        )
+
+
+def _abrir_sesion_guardada() -> Sesion | None:
+    """
+    Pide el archivo `.combos`, lo lee y reconstruye la sesión completa
+    (reglamento re-validado, combinaciones regeneradas, descartes
+    reaplicados). Devuelve None si el usuario cancela o el archivo no
+    se puede abrir; el llamador vuelve al menú de inicio.
+    """
+    ruta = _pedir_ruta_combos_guardado()
+    if ruta is None:
+        return None
+    mostrar_procesando(f"Abriendo sesión: {ruta.name} ...")
+    try:
+        datos = leer_combos(str(ruta))
+        sesion, avisos = sesion_desde_datos(datos)
+    except ErrorArchivoCombos as error:
+        _informar_error_de_apertura(str(error), error)
+        return None
+    except ErrorSesionInvalida as error:
+        _informar_error_de_apertura(
+            f"No se pudo abrir '{ruta.name}': {error}", error
+        )
+        return None
+    mostrar_resumen_restauracion(
+        sesion,
+        nombre_archivo=ruta.name,
+        fecha_guardado=str(datos["guardado_el"]),
+        version_combos=str(datos["combos_version"]),
+    )
+    for aviso in avisos:
+        mostrar_advertencia(aviso)
+    return sesion
+
+
+def _pedir_ruta_combos_guardado() -> Path | None:
+    ruta = _pedir_ruta_con_dialogo(
+        titulo="Abrir sesión guardada",
+        modo="abrir",
+        tipos_archivo=[("Sesión de COMBOS", f"*{EXTENSION_COMBOS}")],
+        ruta_por_defecto=(
+            Path.home() / NOMBRE_CARPETA_ESCRITORIO
+            / f"sesion{EXTENSION_COMBOS}"
+        ),
+    )
+    if ruta is not None:
+        return ruta
+    while True:
+        entrada = pedir_input(
+            "Ruta del archivo .combos [Enter = volver al inicio]:"
+        ).strip()
+        if not entrada:
+            return None
+        ruta = Path(entrada)
+        if not ruta.exists():
+            mostrar_advertencia(
+                f"No se encontró el archivo: '{escape(str(ruta))}'"
+            )
+            continue
+        return ruta
+
+
+def _informar_error_de_apertura(mensaje: str, error: Exception) -> None:
+    """
+    Muestra por qué no se pudo abrir la sesión y registra el detalle
+    técnico en el log. No termina el programa: el flujo vuelve al menú
+    de inicio.
+    """
+    _loguear_error_tecnico(
+        "apertura de una sesión .combos", error.__cause__ or error
+    )
+    mostrar_error(mensaje)
 
 
 # ── Paso 2 ────────────────────────────────────────────────────────────────────
@@ -128,7 +255,10 @@ def _paso_cargar_reglamento(sesion: Sesion) -> None:
     )
     mostrar_procesando(f"Cargando reglamento: {ruta_yaml.name} ...")
     try:
-        sesion.reglamento_crudo = leer_reglamento(str(ruta_yaml))
+        sesion.reglamento_texto = leer_texto_reglamento(str(ruta_yaml))
+        sesion.reglamento_crudo = leer_reglamento_desde_texto(
+            sesion.reglamento_texto, ruta_yaml.name
+        )
     except (FileNotFoundError, ValueError) as error:
         _terminar_con_error(str(error))
 
@@ -142,7 +272,7 @@ def _paso_cargar_reglamento(sesion: Sesion) -> None:
 
 def _paso_generar_plantilla_si_el_usuario_lo_desea(sesion: Sesion) -> None:
     mostrar_separador("Plantilla")
-    respuesta = pedir_confirmacion("¿Desea generar la plantilla Excel ahora?")
+    respuesta = pedir_confirmacion("¿Querés generar la plantilla Excel ahora?")
     if not respuesta:
         return
 
@@ -161,10 +291,12 @@ def _paso_generar_plantilla_si_el_usuario_lo_desea(sesion: Sesion) -> None:
 
 def _pedir_ruta_destino_plantilla(nombre_yaml: str) -> Path:
     ruta_por_defecto = _ruta_por_defecto_plantilla(nombre_yaml)
-    return _pedir_ruta_destino_excel(
+    return _pedir_ruta_destino_archivo(
         titulo_dialogo="Guardar plantilla de estados de carga",
         prompt_consola="Ruta de destino para la plantilla",
         ruta_por_defecto=ruta_por_defecto,
+        extension=EXTENSION_EXCEL,
+        etiqueta_tipo="Excel",
     )
 
 
@@ -178,19 +310,24 @@ def _ruta_por_defecto_plantilla(nombre_yaml: str) -> Path:
     return ruta_escritorio / nombre_archivo
 
 
-def _pedir_ruta_destino_excel(
-    titulo_dialogo: str, prompt_consola: str, ruta_por_defecto: Path
+def _pedir_ruta_destino_archivo(
+    titulo_dialogo: str,
+    prompt_consola: str,
+    ruta_por_defecto: Path,
+    extension: str,
+    etiqueta_tipo: str,
 ) -> Path:
     """
-    Pide al usuario una ruta de destino .xlsx: primero abre el diálogo
-    del sistema; si el usuario lo cancela o no está disponible, cae al
-    prompt de consola. Repite si el archivo elegido está abierto o si el
-    usuario cancela el sobrescribir de un archivo existente.
+    Pide al usuario una ruta de destino con la extensión indicada:
+    primero abre el diálogo del sistema; si el usuario lo cancela o no
+    está disponible, cae al prompt de consola. Repite si el archivo
+    elegido está abierto o si el usuario cancela el sobrescribir de un
+    archivo existente.
     """
     ruta_dialogo = _pedir_ruta_con_dialogo(
         titulo=titulo_dialogo,
         modo="guardar",
-        tipos_archivo=[("Excel", f"*{EXTENSION_EXCEL}")],
+        tipos_archivo=[(etiqueta_tipo, f"*{extension}")],
         ruta_por_defecto=ruta_por_defecto,
     )
     viene_del_dialogo = ruta_dialogo is not None
@@ -199,29 +336,31 @@ def _pedir_ruta_destino_excel(
             ruta = ruta_dialogo
             ruta_dialogo = None
         else:
-            ruta = _leer_ruta_excel_por_consola(
-                prompt_consola, ruta_por_defecto
+            ruta = _leer_ruta_por_consola(
+                prompt_consola, ruta_por_defecto, extension
             )
             viene_del_dialogo = False
-        if not _confirmar_destino_excel(ruta, viene_del_dialogo):
+        if not _confirmar_destino_archivo(ruta, viene_del_dialogo):
             viene_del_dialogo = False
             continue
         return ruta
 
 
-def _leer_ruta_excel_por_consola(prompt: str, ruta_por_defecto: Path) -> Path:
+def _leer_ruta_por_consola(
+    prompt: str, ruta_por_defecto: Path, extension: str
+) -> Path:
     entrada = pedir_input(
-        f"{prompt} [Enter = {ruta_por_defecto}]:"
+        f"{prompt} [Enter = {escape(str(ruta_por_defecto))}]:"
     ).strip()
     if not entrada:
         return ruta_por_defecto
     ruta = Path(entrada)
-    if ruta.suffix.lower() != EXTENSION_EXCEL:
-        ruta = ruta.with_suffix(EXTENSION_EXCEL)
+    if ruta.suffix.lower() != extension:
+        ruta = ruta.with_suffix(extension)
     return ruta
 
 
-def _confirmar_destino_excel(ruta: Path, viene_del_dialogo: bool) -> bool:
+def _confirmar_destino_archivo(ruta: Path, viene_del_dialogo: bool) -> bool:
     """
     Devuelve True si `ruta` es un destino aceptable; False si hay que
     pedirla de nuevo (archivo abierto o el usuario canceló el sobrescribir).
@@ -230,14 +369,14 @@ def _confirmar_destino_excel(ruta: Path, viene_del_dialogo: bool) -> bool:
         return True
     if _archivo_esta_abierto(ruta):
         mostrar_advertencia(
-            f"El archivo '{ruta.name}' está abierto. "
+            f"El archivo '{escape(ruta.name)}' está abierto. "
             "Cerralo e intentá de nuevo, o ingresá otra ruta."
         )
         return False
     if viene_del_dialogo:
         return True
     return pedir_confirmacion(
-        f"El archivo '{ruta.name}' ya existe. ¿Sobreescribir?"
+        f"El archivo '{escape(ruta.name)}' ya existe. ¿Sobrescribir?"
     )
 
 
@@ -271,7 +410,7 @@ def _leer_config_plantilla() -> dict:
 
 def _pedir_ruta_excel_completado() -> Path:
     pedir_enter(
-        "Presione Enter para abrir el explorador de archivos y "
+        "Presioná Enter para abrir el explorador de archivos y "
         "seleccionar la planilla completada:"
     )
     ruta_por_defecto = Path.home() / NOMBRE_CARPETA_ESCRITORIO
@@ -293,7 +432,9 @@ def _pedir_ruta_excel_completado() -> Path:
             continue
         ruta = Path(entrada)
         if not ruta.exists():
-            mostrar_advertencia(f"No se encontró el archivo: '{ruta}'")
+            mostrar_advertencia(
+                f"No se encontró el archivo: '{escape(str(ruta))}'"
+            )
             continue
         return ruta
 
@@ -373,14 +514,14 @@ def _pedir_numero_de_opcion(parametro: ParametroReglamento) -> int:
     numero_default = numero_opcion_default(parametro)
     while True:
         entrada = pedir_input(
-            f"Elija una opción (1-{cantidad}) [Enter = {numero_default}]:"
+            f"Elegí una opción (1-{cantidad}) [Enter = {numero_default}]:"
         ).strip()
         if entrada == "":
             return numero_default
         if entrada.isdigit() and 1 <= int(entrada) <= cantidad:
             return int(entrada)
         mostrar_advertencia(
-            f"Ingrese un número entre 1 y {cantidad}, o Enter para la "
+            f"Ingresá un número entre 1 y {cantidad} o Enter para la "
             "opción por defecto."
         )
 
@@ -393,7 +534,10 @@ def _paso_procesar(sesion: Sesion) -> None:
     superadas) e informa los resultados de cada etapa en pantalla.
     """
     mostrar_separador("Procesamiento")
-    procesar(sesion)
+    try:
+        procesar(sesion)
+    except ErrorLimiteCombinaciones as error:
+        _terminar_con_error(str(error))
     mostrar_info(
         f"Combinaciones generadas: "
         f"[bold]{len(sesion.combinaciones)}[/bold]"
@@ -440,7 +584,7 @@ def _paso_resolver_combinaciones_superadas(sesion: Sesion) -> None:
 def _confirmar_descarte(indices_a_descartar: set[int]) -> bool:
     lista = ", ".join(f"#{i}" for i in sorted(indices_a_descartar))
     mostrar_info(f"Se van a descartar: {lista}")
-    return pedir_confirmacion("¿Confirma este descarte?")
+    return pedir_confirmacion("¿Confirmás este descarte?")
 
 
 def _pedir_indices_a_descartar(superadas: list[Combinacion]) -> set[int]:
@@ -490,7 +634,7 @@ def _confirmar_continuar_sin_combinaciones() -> bool:
     mostrar_advertencia(
         "No quedó ninguna combinación resultante para exportar."
     )
-    return pedir_confirmacion("¿Desea elegir un exportador igualmente?")
+    return pedir_confirmacion("¿Querés elegir un exportador igualmente?")
 
 
 # ── Paso 11 ───────────────────────────────────────────────────────────────────
@@ -520,7 +664,6 @@ def _paso_exportar(sesion: Sesion) -> None:
     cantidad_validas = len(combinaciones_resultantes(sesion))
     mostrar_exito(f"{cantidad_validas} combinación(es) exportada(s).")
     mostrar_exito(f"Archivo generado: {ruta_destino}")
-    pedir_enter("Presioná Enter para cerrar COMBOS...")
 
 
 def _leer_config_resumen() -> dict:
@@ -528,8 +671,22 @@ def _leer_config_resumen() -> dict:
 
 
 def _leer_config_exportador(ruta_yaml: Path) -> dict:
+    if ruta_yaml.stat().st_size > MAX_BYTES_YAML:
+        _terminar_con_error(
+            f"El perfil de exportación '{ruta_yaml.name}' supera el "
+            f"tamaño máximo admitido "
+            f"({MAX_BYTES_YAML // (1024 * 1024)} MB). Revisá que sea "
+            f"el archivo correcto."
+        )
+    contenido = ruta_yaml.read_text(encoding="utf-8")
+    if contiene_alias_yaml(contenido):
+        _terminar_con_error(
+            f"El perfil de exportación '{ruta_yaml.name}' usa anclas y "
+            f"alias de YAML ('&' y '*'), que COMBOS no admite. Escribí "
+            f"cada valor de forma explícita."
+        )
     try:
-        config = yaml.safe_load(ruta_yaml.read_text(encoding="utf-8"))
+        config = yaml.safe_load(contenido)
     except yaml.YAMLError as error:
         _loguear_error_tecnico(
             f"lectura del perfil de exportación '{ruta_yaml.name}'",
@@ -554,10 +711,63 @@ def _pedir_ruta_destino_exportacion(ruta_exportador: Path) -> Path:
     ruta_por_defecto = (
         Path.home() / NOMBRE_CARPETA_ESCRITORIO / nombre_archivo
     )
-    return _pedir_ruta_destino_excel(
+    return _pedir_ruta_destino_archivo(
         titulo_dialogo="Guardar archivo de exportación",
         prompt_consola="Ruta de destino para el archivo de exportación",
         ruta_por_defecto=ruta_por_defecto,
+        extension=EXTENSION_EXCEL,
+        etiqueta_tipo="Excel",
+    )
+
+
+# ── Paso 12: guardar sesión ───────────────────────────────────────────────────
+
+def _paso_guardar_sesion(sesion: Sesion) -> None:
+    """
+    Ofrece guardar la sesión como archivo `.combos` para retomarla más
+    adelante. Si la sesión quedó incompleta (sin reglamento o sin
+    estados), no ofrece nada: el esquema del formato solo persiste
+    sesiones completas.
+    """
+    if sesion.reglamento_texto is None or not sesion.estados_crudos:
+        return
+    mostrar_separador("Guardar sesión")
+    if not pedir_confirmacion(
+        "¿Querés guardar esta sesión para retomarla más adelante?"
+    ):
+        return
+    ruta_destino = _pedir_ruta_destino_sesion(sesion.nombre_perfil)
+    mostrar_procesando(f"Guardando sesión en: {ruta_destino} ...")
+    try:
+        guardar_combos(sesion_a_datos(sesion, VERSION), str(ruta_destino))
+    except ErrorArchivoCombos as error:
+        _loguear_error_tecnico(
+            "guardado de una sesión .combos", error.__cause__ or error
+        )
+        mostrar_error(str(error))
+        return
+    mostrar_exito(f"Sesión guardada: {ruta_destino}")
+    mostrar_info(
+        '[dim]Para retomarla, elegí "Abrir una sesión guardada" al '
+        "iniciar COMBOS.[/dim]"
+    )
+
+
+def _pedir_ruta_destino_sesion(nombre_yaml: str) -> Path:
+    fecha = datetime.now().strftime(FORMATO_FECHA_ARCHIVO)
+    nombre_archivo = (
+        f"{PREFIJO_SESION}{Path(nombre_yaml).stem}_{fecha}"
+        f"{EXTENSION_COMBOS}"
+    )
+    ruta_por_defecto = (
+        Path.home() / NOMBRE_CARPETA_ESCRITORIO / nombre_archivo
+    )
+    return _pedir_ruta_destino_archivo(
+        titulo_dialogo="Guardar sesión de COMBOS",
+        prompt_consola="Ruta de destino para la sesión",
+        ruta_por_defecto=ruta_por_defecto,
+        extension=EXTENSION_COMBOS,
+        etiqueta_tipo="Sesión de COMBOS",
     )
 
 
@@ -583,15 +793,15 @@ def _pedir_archivo_de_directorio(
 
     while True:
         entrada = pedir_seleccion_de_archivo(
-            f"Elija un {descripcion_tipo} (1-{len(archivos)}):",
+            f"Elegí un {descripcion_tipo} (1-{len(archivos)}):",
             al_reimprimir=reimprimir if seccion else None,
         ).strip()
         if not entrada.isdigit():
-            mostrar_advertencia(f"Ingrese un número entre 1 y {len(archivos)}.")
+            mostrar_advertencia(f"Ingresá un número entre 1 y {len(archivos)}.")
             continue
         indice = int(entrada) - 1
         if not (0 <= indice < len(archivos)):
-            mostrar_advertencia(f"Ingrese un número entre 1 y {len(archivos)}.")
+            mostrar_advertencia(f"Ingresá un número entre 1 y {len(archivos)}.")
             continue
         return archivos[indice]
 

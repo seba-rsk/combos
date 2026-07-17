@@ -193,3 +193,24 @@ def test_reglamento_crudo_se_preserva_al_resolver_parametros():
     factor_resuelto = sesion.reglamento["combinations"]["ELU"][0]["factors"]
     assert factor_crudo["L"] == {"param": "K"}
     assert factor_resuelto["L"] == 0.5
+
+
+# ── Límite de combinaciones ───────────────────────────────────────────────────
+
+def test_procesar_rechaza_entradas_desmedidas(
+    sesion_lista_para_procesar, monkeypatch
+):
+    """
+    El tope corta antes de generar: una entrada cuyo producto cartesiano
+    excede el límite no debe llegar a construir ninguna combinación.
+    """
+    import dominio.sesion as modulo_sesion
+    monkeypatch.setattr(modulo_sesion, "LIMITE_COMBINACIONES", 3)
+
+    with pytest.raises(
+        modulo_sesion.ErrorLimiteCombinaciones, match="máximo"
+    ) as info:
+        procesar(sesion_lista_para_procesar)
+
+    assert info.value.cantidad == 4
+    assert sesion_lista_para_procesar.combinaciones == []
