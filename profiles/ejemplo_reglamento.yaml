@@ -36,7 +36,10 @@ permanent_load_types:
 # exportado. Ver profiles/cirsoc2005_actualizado.yaml para un caso real.
 #
 # parameters:
-#   L_factor:                     # Id del parámetro (se usa en las referencias).
+#   L_factor:                     # Id libre, a tu elección (f1, destino, lo
+#                                 # que quieras): es el nombre que escribís en
+#                                 # las referencias { param: <id> }. No hay
+#                                 # ninguna convención obligatoria de nombres.
 #     name: "Factor de sobrecarga L"   # Título que se muestra en pantalla.
 #     options:                    # Al menos dos opciones.
 #       - label: "Destinos con sobrecarga alta"   # Texto libre, a criterio del autor.
@@ -53,6 +56,8 @@ permanent_load_types:
 # Validaciones de parameters
 # Sección opcional: si no existe, el reglamento se comporta como siempre.
 # Si existe, no puede estar vacía.
+# La clave de cada parámetro es su id: texto libre, sin convención de
+#   nombres (f1, destino y L_factor son todos válidos).
 # Cada parámetro necesita name, options (mínimo dos, cada una con label y
 #   value mayor que cero) y default (igual al value de alguna opción).
 # Toda referencia { param: X } debe apuntar a un parámetro definido.

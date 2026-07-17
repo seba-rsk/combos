@@ -458,7 +458,7 @@ Cuando un reglamento admite factores alternativos que dependen de una propiedad 
 
 ```yaml
 parameters:
-  L_factor:                            # Id del parámetro
+  L_factor:                            # Id libre, a tu elección — es lo que escribís en las referencias
     name: "Factor de sobrecarga L"     # Título que se muestra en pantalla
     options:                           # Al menos dos opciones
       - label: "Cocheras, lugares de reunión pública o L > 5 kN/m²"
@@ -466,6 +466,14 @@ parameters:
       - label: "Resto de los destinos (L ≤ 5 kN/m²)"
         value: 0.5
     default: 1.0                       # Debe coincidir con el value de una opción
+  f1:                                  # Otro parámetro: el id es cualquier texto, sin convención
+    name: "Factor f1"
+    options:
+      - label: "Condición A"
+        value: 1.6
+      - label: "Condición B"
+        value: 1.2
+    default: 1.6
 
 combinations:
   ELU:
@@ -474,11 +482,16 @@ combinations:
         D: 1.2
         Lr: 1.6
         L: { param: L_factor }         # Referencia: se resuelve con el valor elegido
+    - id: 6
+      factors:
+        D: 1.2
+        W: { param: f1 }
 ```
 
 Reglas de la sección `parameters`:
 
 - Es opcional. Si no existe, el reglamento se comporta como siempre; si existe, no puede estar vacía.
+- La clave de cada parámetro (`L_factor`, `f1`) es su **id** y la elegís libremente — no hay ninguna convención de nombres. Es el texto que usás en las referencias `{ param: <id> }`.
 - Cada parámetro necesita `name`, al menos dos `options` (cada una con `label` y `value` mayor que cero) y un `default` igual al `value` de alguna opción.
 - Toda referencia `{ param: X }` debe apuntar a un parámetro definido, y todo parámetro definido debe ser usado por al menos una combinación.
 
