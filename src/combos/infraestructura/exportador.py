@@ -5,17 +5,17 @@ from pathlib import Path
 
 import openpyxl
 
-from dominio.envolventes import construir_envolventes
-from dominio.formateador import formatear_componentes
-from dominio.modelos import (
+from combos.dominio.envolventes import construir_envolventes
+from combos.dominio.formateador import formatear_componentes
+from combos.dominio.modelos import (
     Combinacion,
     Componente,
     EleccionParametro,
     EstadoCrudo,
 )
-from dominio.sesion import Sesion
-from infraestructura.encabezado_excel import escribir_encabezado_programa
-from infraestructura.estilos_excel import (
+from combos.dominio.sesion import Sesion
+from combos.infraestructura.encabezado_excel import escribir_encabezado_programa
+from combos.infraestructura.estilos_excel import (
     ajustar_anchos_columnas,
     aplicar_borde_perimetral_tabla,
     aplicar_estilo_encabezado_tabla,
@@ -24,8 +24,8 @@ from infraestructura.estilos_excel import (
     aplicar_estilo_mensaje_vacio,
     aplicar_estilo_titulo_seccion,
 )
-from infraestructura.guardado_excel import guardar_excel_atomico
-from infraestructura.sanitizacion_excel import neutralizar_texto_libre
+from combos.infraestructura.guardado_excel import guardar_excel_atomico
+from combos.infraestructura.sanitizacion_excel import neutralizar_texto_libre
 
 # Límite de Excel para el nombre de una hoja.
 MAX_CARACTERES_NOMBRE_HOJA = 31
@@ -486,6 +486,9 @@ def _escribir_seccion_superadas(
 
 # ── Hoja 2: Exportación ───────────────────────────────────────────────────────
 
+_CARACTERES_PROHIBIDOS_EN_HOJA_EXCEL = str.maketrans("", "", "'\"\\/?*[]:")
+
+
 def _escribir_hoja_exportacion(
     libro: openpyxl.Workbook,
     combinaciones: list[Combinacion],
@@ -494,7 +497,9 @@ def _escribir_hoja_exportacion(
 ) -> None:
     nombre_software = config_exportador["metadata"]["software_name"]
     nombre_hoja_raw = (
-        f"Output {nombre_software}".replace("'", "").replace('"', "")
+        f"Output {nombre_software}".translate(
+            _CARACTERES_PROHIBIDOS_EN_HOJA_EXCEL
+        )
     )
     nombre_hoja = nombre_hoja_raw[:MAX_CARACTERES_NOMBRE_HOJA]
     hoja = libro.create_sheet(nombre_hoja)
@@ -755,9 +760,15 @@ def _validar_config_exportador(config_exportador: dict) -> None:
             "config_exportador: falta el campo 'metadata' o no es una "
             "sección con claves."
         )
-    if "software_name" not in config_exportador["metadata"]:
+    software_name = config_exportador["metadata"].get("software_name")
+    if software_name is None:
         raise ValueError(
             "config_exportador: falta el campo 'metadata.software_name'."
+        )
+    if not isinstance(software_name, str) or not software_name.strip():
+        raise ValueError(
+            "config_exportador: el campo 'metadata.software_name' debe "
+            "ser un texto no vacío."
         )
     if not isinstance(config_exportador.get("hoja"), dict):
         raise ValueError(

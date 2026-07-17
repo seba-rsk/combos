@@ -3,7 +3,7 @@ from pathlib import Path
 
 import yaml
 
-from dominio.modelos import OpcionParametro, ParametroReglamento
+from combos.dominio.modelos import OpcionParametro, ParametroReglamento
 
 SECCIONES_OBLIGATORIAS = {
     "metadata",
@@ -47,6 +47,8 @@ def leer_texto_reglamento(ruta_yaml: str) -> str:
 
     Raises:
         FileNotFoundError: Si el archivo no existe en la ruta indicada.
+        ValueError: Si el archivo supera el tamaño máximo o no está
+                    codificado en UTF-8.
     """
     ruta = Path(ruta_yaml)
     if not ruta.exists():
@@ -60,7 +62,14 @@ def leer_texto_reglamento(ruta_yaml: str) -> str:
             f"Un reglamento real ocupa unos pocos KB; revisá que sea el "
             f"archivo correcto."
         )
-    return ruta.read_text(encoding="utf-8")
+    try:
+        return ruta.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError(
+            f"El archivo de reglamento '{ruta.name}' no está codificado "
+            f"en UTF-8. Guardalo como UTF-8 desde tu editor y volvé a "
+            f"intentarlo."
+        ) from error
 
 
 def contiene_alias_yaml(contenido: str) -> bool:

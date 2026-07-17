@@ -12,19 +12,19 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
-from cli.constantes import (
+from combos.cli.constantes import (
     ANCHO_DESIGNACIONES_AFECTADAS,
     ANCHO_SEPARADOR_ESTADO,
     FILAS_POR_PAGINA,
     PAUSA_SEPARADOR_SEGUNDOS,
 )
-from dominio.formateador import formatear_componentes
-from dominio.modelos import (
+from combos.dominio.formateador import formatear_componentes
+from combos.dominio.modelos import (
     Combinacion,
     EleccionParametro,
     ParametroReglamento,
 )
-from dominio.sesion import Sesion
+from combos.dominio.sesion import Sesion
 
 console = Console()
 

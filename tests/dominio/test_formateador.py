@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dominio.formateador import formatear_componentes
+from combos.dominio.formateador import formatear_componentes
 
 
 def test_formatear_componentes_caso_tipico(hacer_componente):

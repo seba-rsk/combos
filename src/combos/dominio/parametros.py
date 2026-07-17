@@ -12,8 +12,8 @@ factores son siempre numéricos.
 
 from __future__ import annotations
 
-from dominio.lector_yaml import CLAVE_REFERENCIA_PARAMETRO
-from dominio.modelos import EleccionParametro, ParametroReglamento
+from combos.dominio.lector_yaml import CLAVE_REFERENCIA_PARAMETRO
+from combos.dominio.modelos import EleccionParametro, ParametroReglamento
 
 
 def resolver_parametros(

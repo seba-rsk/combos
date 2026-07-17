@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from dominio.lector_yaml import leer_reglamento
+from combos.dominio.lector_yaml import leer_reglamento
 
 YAML_VALIDO = """
 metadata:
@@ -640,7 +640,7 @@ def test_leer_reglamento_con_alias_yaml_falla(tmp_path):
 
 
 def test_leer_reglamento_archivo_gigante_falla(tmp_path, monkeypatch):
-    import dominio.lector_yaml as modulo_lector
+    import combos.dominio.lector_yaml as modulo_lector
     monkeypatch.setattr(modulo_lector, "MAX_BYTES_YAML", 10)
     ruta = _escribir_yaml(tmp_path, YAML_VALIDO)
 

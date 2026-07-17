@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from dominio.lector_plantilla import ErrorValidacionPlantilla, leer_plantilla
-from dominio.modelos import EstadoCrudo
+from combos.dominio.lector_plantilla import (
+    ErrorValidacionPlantilla,
+    leer_plantilla,
+)
+from combos.dominio.modelos import EstadoCrudo
 
 
 def _estado_crudo_simple(nombre: str, tipo_carga: str) -> EstadoCrudo:

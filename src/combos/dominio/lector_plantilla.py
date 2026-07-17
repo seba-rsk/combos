@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dominio.modelos import Estado, EstadoCrudo
+from combos.dominio.modelos import Estado, EstadoCrudo
 
 
 class ErrorValidacionPlantilla(Exception):

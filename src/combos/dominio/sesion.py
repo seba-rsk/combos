@@ -13,18 +13,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from dominio.duplicados import marcar_duplicadas
-from dominio.generador import (
+from combos.dominio.duplicados import marcar_duplicadas
+from combos.dominio.generador import (
     contar_combinaciones_previstas,
     generar_combinaciones,
 )
-from dominio.modelos import (
+from combos.dominio.modelos import (
     Combinacion,
     EleccionParametro,
     Estado,
     EstadoCrudo,
 )
-from dominio.preponderancia import marcar_superadas
+from combos.dominio.preponderancia import marcar_superadas
 
 # Tope de combinaciones que una corrida puede generar. Las variantes de
 # los grupos direccionales se multiplican entre sí, así que una entrada

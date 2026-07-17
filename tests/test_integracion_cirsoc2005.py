@@ -4,19 +4,19 @@ from pathlib import Path
 
 import pytest
 
-from dominio.duplicados import marcar_duplicadas
-from dominio.generador import generar_combinaciones
-from dominio.lector_plantilla import leer_plantilla
-from dominio.lector_yaml import leer_reglamento
-from dominio.modelos import EstadoCrudo
-from dominio.parametros import (
+from combos.dominio.duplicados import marcar_duplicadas
+from combos.dominio.generador import generar_combinaciones
+from combos.dominio.lector_plantilla import leer_plantilla
+from combos.dominio.lector_yaml import leer_reglamento
+from combos.dominio.modelos import EstadoCrudo
+from combos.dominio.parametros import (
     crear_eleccion,
     numero_opcion_default,
     resolver_parametros,
 )
-from dominio.preponderancia import marcar_superadas
+from combos.dominio.preponderancia import marcar_superadas
 
-RUTA_PROFILES = Path(__file__).parent.parent / "profiles"
+RUTA_PROFILES = Path(__file__).parent.parent / "src" / "combos" / "profiles"
 RUTA_CIRSOC2005 = RUTA_PROFILES / "cirsoc2005.yaml"
 RUTA_CIRSOC2005_ACTUALIZADO = RUTA_PROFILES / "cirsoc2005_actualizado.yaml"
 

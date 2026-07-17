@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dominio.envolventes import construir_envolventes
+from combos.dominio.envolventes import construir_envolventes
 
 
 def test_construir_envolventes_agrupa_por_estado_limite(

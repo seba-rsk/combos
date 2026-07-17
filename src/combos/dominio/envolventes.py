@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from dominio.modelos import Combinacion, FilaEnvolvente
+from combos.dominio.modelos import Combinacion, FilaEnvolvente
 
 
 def construir_envolventes(

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from dominio.modelos import EleccionParametro
-from dominio.parametros import resolver_parametros
-from dominio.sesion import (
+from combos.dominio.modelos import EleccionParametro
+from combos.dominio.parametros import resolver_parametros
+from combos.dominio.sesion import (
     Sesion,
     aplicar_descartes,
     combinaciones_resultantes,
@@ -204,7 +204,7 @@ def test_procesar_rechaza_entradas_desmedidas(
     El tope corta antes de generar: una entrada cuyo producto cartesiano
     excede el límite no debe llegar a construir ninguna combinación.
     """
-    import dominio.sesion as modulo_sesion
+    import combos.dominio.sesion as modulo_sesion
     monkeypatch.setattr(modulo_sesion, "LIMITE_COMBINACIONES", 3)
 
     with pytest.raises(

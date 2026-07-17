@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dominio.generador import (
+from combos.dominio.generador import (
     contar_combinaciones_previstas,
     generar_combinaciones,
 )

@@ -18,18 +18,18 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime
 
-from dominio.lector_plantilla import (
+from combos.dominio.lector_plantilla import (
     ErrorValidacionPlantilla,
     leer_plantilla,
 )
-from dominio.lector_yaml import es_numero, leer_reglamento_desde_texto
-from dominio.modelos import EleccionParametro, Estado, EstadoCrudo
-from dominio.parametros import (
+from combos.dominio.lector_yaml import es_numero, leer_reglamento_desde_texto
+from combos.dominio.modelos import EleccionParametro, Estado, EstadoCrudo
+from combos.dominio.parametros import (
     crear_eleccion,
     numero_opcion_default,
     resolver_parametros,
 )
-from dominio.sesion import (
+from combos.dominio.sesion import (
     ErrorLimiteCombinaciones,
     Sesion,
     aplicar_descartes,

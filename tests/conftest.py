@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from dominio.modelos import Combinacion, Componente, Estado
+from combos.dominio.modelos import Combinacion, Componente, Estado
 
 
 @pytest.fixture

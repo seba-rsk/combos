@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from dominio.modelos import EleccionParametro
-from infraestructura.estilos_excel import (
+from combos.dominio.modelos import EleccionParametro
+from combos.infraestructura.estilos_excel import (
     ajustar_ancho_columna_titulo,
     aplicar_estilo_etiqueta_hoja,
     aplicar_estilo_label_metadata,
     aplicar_estilo_titulo_programa,
     aplicar_estilo_valor_metadata,
 )
-from infraestructura.sanitizacion_excel import neutralizar_texto_libre
+from combos.infraestructura.sanitizacion_excel import neutralizar_texto_libre
 
 _FORMATO_FECHA_ENCABEZADO = "%d/%m/%Y %H:%M"
 

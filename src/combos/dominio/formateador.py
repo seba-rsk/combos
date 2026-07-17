@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dominio.modelos import Componente
+from combos.dominio.modelos import Componente
 
 
 def formatear_componentes(componentes: list[Componente]) -> str:

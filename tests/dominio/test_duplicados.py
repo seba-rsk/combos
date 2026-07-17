@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dominio.duplicados import marcar_duplicadas
+from combos.dominio.duplicados import marcar_duplicadas
 
 
 def test_marcar_duplicadas_combinaciones_identicas_se_marcan(

@@ -13,7 +13,7 @@ import json
 import os
 from pathlib import Path
 
-from dominio.persistencia_sesion import MENSAJE_ARCHIVO_DANADO
+from combos.dominio.persistencia_sesion import MENSAJE_ARCHIVO_DANADO
 
 # Tamaño máximo de un archivo .combos. Una sesión real (reglamento
 # embebido incluido) ocupa unos pocos KB; el límite corta archivos

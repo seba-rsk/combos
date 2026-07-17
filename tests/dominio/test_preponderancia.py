@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dominio.preponderancia import marcar_superadas
+from combos.dominio.preponderancia import marcar_superadas
 
 
 def test_marcar_superadas_dominancia_estricta_marca_la_dominada(

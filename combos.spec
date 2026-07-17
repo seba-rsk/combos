@@ -1,5 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+# DESACTUALIZADO desde la migración a Nivel 3 (2026-07-17): las rutas
+# "main.py", "profiles" y "exportadores" ya no existen en la raíz del
+# repo. El código vive ahora en src/combos/. Este .spec se rehace desde
+# cero como parte del ítem 4B del plan post-v1.1.0 (decisiones de
+# instalación: instalador, empaquetador y destino). Hasta entonces
+# `pyinstaller combos.spec` va a fallar — es esperable.
+
 a = Analysis(
     ["main.py"],
     pathex=[],

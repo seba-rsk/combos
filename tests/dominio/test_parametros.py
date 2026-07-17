@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from dominio.modelos import (
+from combos.dominio.modelos import (
     EleccionParametro,
     OpcionParametro,
     ParametroReglamento,
 )
-from dominio.parametros import (
+from combos.dominio.parametros import (
     combinaciones_que_referencian,
     crear_eleccion,
     numero_opcion_default,

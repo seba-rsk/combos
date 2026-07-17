@@ -22,6 +22,23 @@ gráfica o se planifique distribución a usuarios que no sean el autor.
 
 ---
 
+## Split de `cli/flujo.py` en submódulos
+
+**Identificado por:** auditoría `/auditoria` (2026-07-17).
+
+**Descripción:** el archivo tiene 892 líneas y concentra el menú de
+inicio, los doce pasos del flujo, seis helpers de diálogo/ruta y dos
+loggers técnicos. Después de los refactors de los ítems 2 y 3 los pasos
+quedaron cortos y la lógica se movió a `dominio/sesion.py`, así que el
+archivo no duele hoy — pero cada feature nueva de la CLI lo va a hacer
+crecer linealmente. Candidato natural a partirse en `flujo_inicio.py`,
+`flujo_procesamiento.py`, `flujo_exportacion.py` y `logging_tecnico.py`.
+
+**Condición de activación:** cuando se agregue una feature nueva a la
+CLI que sume otro paso (o cuando el archivo cruce las 1000 líneas).
+
+---
+
 ## Split de `infraestructura/exportador.py` en submódulos
 
 **Identificado por:** auditoría `/auditoria` (2026-07-13, punto 5).
@@ -71,22 +88,6 @@ usuario pida el reporte en PDF.
 
 ---
 
-## Endurecer sanitización de `software_name` para nombre de hoja Excel
-
-**Identificado por:** auditoría `/auditoria` — revisor de seguridad
-(2026-07-16, severidad baja).
-
-**Descripción:** el `software_name` del YAML del reglamento se usa como
-nombre de hoja de Excel sin validar contra las reglas de openpyxl (largo
-máximo 31 caracteres, caracteres inválidos `\ / * ? [ ] :`). Un reglamento
-propio mal armado hace fallar el export. Hoy con "único dueño" es un error
-autoinfligido; con reglamentos importados de terceros deja de serlo.
-
-**Condición de activación:** cuando se acepten reglamentos importados desde
-usuarios que no sean el autor.
-
----
-
 ## Escritura atómica con nombre de temporal no predecible
 
 **Identificado por:** auditoría `/auditoria` — revisor de seguridad
@@ -117,3 +118,31 @@ caracteres de control: un nombre de archivo malicioso puede inyectar líneas.
 
 **Condición de activación:** al distribuir el software a terceros o al
 publicar un mecanismo automático de envío de logs.
+
+---
+
+## Asociación de archivos `.combos` con el software en Windows
+
+**Identificado por:** sesión de pruebas manuales (2026-07-17).
+
+**Descripción:** que un doble click sobre un `.combos` abra COMBOS con
+esa sesión ya cargada, y que el explorador de Windows muestre
+`combos.ico` como icono del archivo. Son dos piezas complementarias:
+
+1. **Instalador:** registra la asociación `.combos` en el registro de
+   Windows (`HKCR\.combos`, ProgID propio, `DefaultIcon` apuntando a
+   `combos.ico`, `shell\open\command` con el ejecutable + `%1`). Hacerlo
+   desde la app en cada arranque es mala práctica; corresponde al
+   instalador (candidato natural: **Inno Setup** sobre un ejecutable
+   armado con PyInstaller, estándar de facto en Windows).
+2. **Entry point:** que `main.py` (o el ejecutable, o la GUI del ítem 5)
+   acepte una ruta a `.combos` como argumento y salte al paso de
+   apertura de sesión sin pasar por el menú de inicio.
+
+Sin la pieza 2, el doble click abre COMBOS pero el usuario tiene que
+navegar el menú manualmente para abrir el archivo — se pierde el
+beneficio de la asociación.
+
+**Condición de activación:** al implementar el instalador (ítem 4 del
+plan post-v1.1.0). Cobra sentido pleno cuando exista la GUI (ítem 5); en
+el CLI actual, doble click sobre archivos es un patrón de uso raro.

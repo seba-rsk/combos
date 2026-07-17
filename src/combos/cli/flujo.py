@@ -10,7 +10,7 @@ from tkinter import filedialog
 import yaml
 from rich.markup import escape
 
-from cli.consola import (
+from combos.cli.consola import (
     mostrar_advertencia,
     mostrar_ayuda_descartar,
     mostrar_bienvenida,
@@ -34,7 +34,7 @@ from cli.consola import (
     pedir_input,
     pedir_seleccion_de_archivo,
 )
-from cli.constantes import (
+from combos.cli.constantes import (
     EXTENSION_COMBOS,
     EXTENSION_EXCEL,
     EXTENSION_YAML,
@@ -45,19 +45,22 @@ from cli.constantes import (
     PREFIJO_PLANTILLA,
     PREFIJO_SESION,
 )
-from dominio.lector_plantilla import ErrorValidacionPlantilla, leer_plantilla
-from dominio.lector_yaml import (
+from combos.dominio.lector_plantilla import (
+    ErrorValidacionPlantilla,
+    leer_plantilla,
+)
+from combos.dominio.lector_yaml import (
     MAX_BYTES_YAML,
     contiene_alias_yaml,
     leer_reglamento_desde_texto,
     leer_texto_reglamento,
 )
-from dominio.modelos import (
+from combos.dominio.modelos import (
     Combinacion,
     EleccionParametro,
     ParametroReglamento,
 )
-from dominio.parametros import (
+from combos.dominio.parametros import (
     combinaciones_que_referencian,
     crear_eleccion,
     numero_opcion_default,
@@ -65,12 +68,12 @@ from dominio.parametros import (
     resolver_parametros,
     tipos_de_carga_que_referencian,
 )
-from dominio.persistencia_sesion import (
+from combos.dominio.persistencia_sesion import (
     ErrorSesionInvalida,
     sesion_a_datos,
     sesion_desde_datos,
 )
-from dominio.sesion import (
+from combos.dominio.sesion import (
     ErrorLimiteCombinaciones,
     Sesion,
     aplicar_descartes,
@@ -78,26 +81,29 @@ from dominio.sesion import (
     combinaciones_superadas,
     procesar,
 )
-from infraestructura.archivo_combos import (
+from combos.infraestructura.archivo_combos import (
     ErrorArchivoCombos,
     guardar_combos,
     leer_combos,
 )
-from infraestructura.config_interna import CONFIG_PLANTILLA, CONFIG_RESUMEN
-from infraestructura.exportador import exportar
-from infraestructura.generador_plantilla import generar_plantilla
-from infraestructura.lector_excel import (
+from combos.infraestructura.config_interna import (
+    CONFIG_PLANTILLA,
+    CONFIG_RESUMEN,
+)
+from combos.infraestructura.exportador import exportar
+from combos.infraestructura.generador_plantilla import generar_plantilla
+from combos.infraestructura.lector_excel import (
     ErrorArchivoExcel,
     ErrorDatoFila,
     ErrorFormatoPlantilla,
     leer_excel,
 )
-from infraestructura.rutas import (
+from combos.infraestructura.rutas import (
     RUTA_EXPORTADORES,
     RUTA_LOG,
     RUTA_PROFILES,
 )
-from version import VERSION
+from combos.version import VERSION
 
 # ── Punto de entrada ──────────────────────────────────────────────────────────
 
@@ -678,7 +684,14 @@ def _leer_config_exportador(ruta_yaml: Path) -> dict:
             f"({MAX_BYTES_YAML // (1024 * 1024)} MB). Revisá que sea "
             f"el archivo correcto."
         )
-    contenido = ruta_yaml.read_text(encoding="utf-8")
+    try:
+        contenido = ruta_yaml.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        _terminar_con_error(
+            f"El perfil de exportación '{ruta_yaml.name}' no está "
+            f"codificado en UTF-8. Guardá el archivo como UTF-8 desde "
+            f"tu editor y volvé a intentarlo."
+        )
     if contiene_alias_yaml(contenido):
         _terminar_con_error(
             f"El perfil de exportación '{ruta_yaml.name}' usa anclas y "
@@ -855,17 +868,22 @@ def _loguear_fallo_dialogo() -> None:
     """
     Registra en el log de errores que el diálogo gráfico de selección de
     archivo falló. El flujo continúa pidiendo la ruta por teclado; este
-    registro solo evita que el fallo quede oculto sin rastro.
+    registro solo evita que el fallo quede oculto sin rastro. Si el log
+    no se puede escribir (carpeta de solo lectura), el registro se
+    pierde en silencio: el usuario ya sigue interactuando por teclado.
     """
     timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
-    with open(RUTA_LOG, "a", encoding="utf-8") as f:
-        f.write(f"\n{'=' * 60}\n")
-        f.write(
-            f"  COMBOS v{VERSION}  —  {timestamp}  —  falló el diálogo de "
-            "selección de archivo, se pidió la ruta por teclado\n"
-        )
-        f.write(f"{'=' * 60}\n")
-        f.write(traceback.format_exc())
+    try:
+        with open(RUTA_LOG, "a", encoding="utf-8") as f:
+            f.write(f"\n{'=' * 60}\n")
+            f.write(
+                f"  COMBOS v{VERSION}  —  {timestamp}  —  falló el diálogo de "
+                "selección de archivo, se pidió la ruta por teclado\n"
+            )
+            f.write(f"{'=' * 60}\n")
+            f.write(traceback.format_exc())
+    except OSError:
+        pass
 
 
 def _loguear_error_tecnico(contexto: str, error: BaseException) -> None:
@@ -873,14 +891,19 @@ def _loguear_error_tecnico(contexto: str, error: BaseException) -> None:
     Registra en el log de errores el detalle técnico de una excepción que
     se le presentó al usuario con un mensaje amable. Permite que el
     reporte de soporte tenga la información técnica sin ensuciar la
-    pantalla del usuario final.
+    pantalla del usuario final. Si el log no se puede escribir, el
+    registro se pierde en silencio: el mensaje amable ya llegó al
+    usuario.
     """
     timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
-    with open(RUTA_LOG, "a", encoding="utf-8") as f:
-        f.write(f"\n{'=' * 60}\n")
-        f.write(
-            f"  COMBOS v{VERSION}  —  {timestamp}  —  error técnico "
-            f"durante {contexto}\n"
-        )
-        f.write(f"{'=' * 60}\n")
-        f.write(f"  {type(error).__name__}: {error}\n")
+    try:
+        with open(RUTA_LOG, "a", encoding="utf-8") as f:
+            f.write(f"\n{'=' * 60}\n")
+            f.write(
+                f"  COMBOS v{VERSION}  —  {timestamp}  —  error técnico "
+                f"durante {contexto}\n"
+            )
+            f.write(f"{'=' * 60}\n")
+            f.write(f"  {type(error).__name__}: {error}\n")
+    except OSError:
+        pass

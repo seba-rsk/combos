@@ -4,11 +4,9 @@ import sys
 import traceback
 from datetime import datetime
 
-from cli.constantes import FORMATO_TIMESTAMP_LOG
-from infraestructura.rutas import RUTA_LOG
-from version import VERSION
-
-LOG_PATH = RUTA_LOG
+from combos.cli.constantes import FORMATO_TIMESTAMP_LOG
+from combos.infraestructura.rutas import RUTA_LOG
+from combos.version import VERSION
 
 
 def main() -> None:
@@ -18,7 +16,7 @@ def main() -> None:
     log, sin exponer detalles técnicos en pantalla.
     """
     try:
-        from cli.flujo import ejecutar_flujo
+        from combos.cli.flujo import ejecutar_flujo
         ejecutar_flujo()
 
     except KeyboardInterrupt:
@@ -48,7 +46,7 @@ def _escribir_log_error() -> bool:
     """
     timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
     try:
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
+        with open(RUTA_LOG, "a", encoding="utf-8") as f:
             f.write(f"\n{'=' * 60}\n")
             f.write(f"  COMBOS v{VERSION}  —  {timestamp}\n")
             f.write(f"{'=' * 60}\n")
@@ -63,7 +61,7 @@ def _mostrar_error_fatal(log_guardado: bool) -> None:
     print("\n" + "=" * 52)
     print("  Ocurrió un error inesperado en COMBOS.")
     if log_guardado:
-        print(f"  Se guardó un informe en:\n  {LOG_PATH}")
+        print(f"  Se guardó un informe en:\n  {RUTA_LOG}")
         print("  Enviá ese archivo para recibir soporte.")
     else:
         print("  No se pudo guardar el informe del error: la carpeta")

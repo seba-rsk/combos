@@ -4,17 +4,17 @@ from openpyxl.styles.protection import Protection
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from infraestructura.config_interna import CONFIG_PLANTILLA
-from infraestructura.encabezado_excel import escribir_encabezado_programa
-from infraestructura.estilos_excel import (
+from combos.infraestructura.config_interna import CONFIG_PLANTILLA
+from combos.infraestructura.encabezado_excel import escribir_encabezado_programa
+from combos.infraestructura.estilos_excel import (
     ajustar_anchos_columnas,
     aplicar_borde_perimetral_tabla,
     aplicar_estilo_celda_gris,
     aplicar_estilo_encabezado_tabla,
     aplicar_estilo_label_metadata,
 )
-from infraestructura.guardado_excel import guardar_excel_atomico
-from infraestructura.sanitizacion_excel import neutralizar_texto_libre
+from combos.infraestructura.guardado_excel import guardar_excel_atomico
+from combos.infraestructura.sanitizacion_excel import neutralizar_texto_libre
 
 NOMBRE_HOJA = "Estados de carga"
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from itertools import product as producto_cartesiano
 
-from dominio.modelos import Combinacion, Componente, Estado
+from combos.dominio.modelos import Combinacion, Componente, Estado
 
 
 def generar_combinaciones(

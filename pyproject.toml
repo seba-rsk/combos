@@ -31,13 +31,14 @@ Homepage = "https://github.com/seba-rsk/combos"
 Repository = "https://github.com/seba-rsk/combos"
 
 [project.scripts]
-combos = "main:main"
+combos = "combos.cli.main:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 
 [tool.setuptools.package-data]
-"*" = ["*.json", "*.yaml"]
+"combos.profiles" = ["*.yaml"]
+"combos.exportadores" = ["*.yaml"]
 
 [tool.ruff]
 line-length = 80

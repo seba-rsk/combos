@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dominio.modelos import Combinacion, Componente
+from combos.dominio.modelos import Combinacion, Componente
 
 
 def marcar_duplicadas(

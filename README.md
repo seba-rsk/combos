@@ -86,8 +86,10 @@ No requiere instalación. Para desinstalar, borrá la carpeta.
 git clone https://github.com/seba-rsk/combos.git
 cd combos
 pip install -e .
-python main.py
+combos
 ```
+
+Alternativamente: `python -m combos`.
 
 ---
 
@@ -304,60 +306,64 @@ Los reglamentos organizan las combinaciones en estados límite. El más común e
 
 ```
 combos/
-├── main.py                       # Punto de entrada del programa
-├── version.py                    # Fuente única de la versión del programa
-├── combos.spec                   # Configuración de build PyInstaller
 ├── pyproject.toml                # Configuración del proyecto y dependencias
-├── combos.ico                    # Icono para versión portable.
-├── cli/
-│   ├── consola.py                # Funciones de presentación en pantalla
-│   ├── flujo.py                  # Orquestador del flujo completo
-│   └── constantes.py             # Constantes de la interfaz (rutas, extensiones, prefijos)
-├── dominio/
-│   ├── modelos.py                # Objetos de dominio (dataclasses) que circulan por el pipeline
-│   ├── sesion.py                 # Estado de una corrida (Sesion) y operaciones del pipeline
-│   ├── persistencia_sesion.py    # Conversión Sesion ⇄ datos del formato .combos y reconstrucción validada
-│   ├── generador.py              # Generación de combinaciones de carga
-│   ├── duplicados.py             # Detección y marcado de combinaciones duplicadas
-│   ├── envolventes.py            # Generación de envolventes
-│   ├── preponderancia.py         # Análisis de preponderancia y marcado de combinaciones superadas
-│   ├── formateador.py            # Formateo de combinaciones para su presentación en pantalla
-│   ├── lector_yaml.py            # Lectura y validación de reglamentos YAML
-│   ├── parametros.py             # Resolución de parámetros del reglamento a factores numéricos
-│   └── lector_plantilla.py       # Validación de los estados de carga ingresados por el usuario
-├── infraestructura/
-│   ├── config_interna.py         # Configuración interna embebida de plantilla y resumen
-│   ├── estilos_excel.py          # Estilos visuales aplicados a los archivos Excel generados
-│   ├── sanitizacion_excel.py     # Neutralización de texto libre antes de escribirlo en Excel
-│   ├── encabezado_excel.py       # Bloque de encabezado compartido por resumen y plantilla
-│   ├── guardado_excel.py         # Guardado atómico de los archivos Excel generados
-│   ├── archivo_combos.py         # Lectura y escritura atómica de archivos de sesión .combos
-│   ├── exportador.py             # Generación del archivo Excel de salida
-│   ├── generador_plantilla.py    # Generación de la planilla Excel en blanco para el usuario
-│   ├── lector_excel.py           # Lectura de la planilla Excel completada por el usuario
-│   └── rutas.py                  # Resolución de rutas del sistema de archivos (desarrollo y portable)
+├── combos.ico                    # Icono del programa
+├── src/
+│   └── combos/                   # Paquete instalable
+│       ├── __main__.py           # Habilita `python -m combos`
+│       ├── version.py            # Fuente única de la versión del programa
+│       ├── cli/
+│       │   ├── main.py           # Punto de entrada (comando `combos`)
+│       │   ├── consola.py        # Funciones de presentación en pantalla
+│       │   ├── flujo.py          # Orquestador del flujo completo
+│       │   └── constantes.py     # Constantes de la interfaz (rutas, extensiones, prefijos)
+│       ├── dominio/
+│       │   ├── modelos.py                # Objetos de dominio (dataclasses) que circulan por el pipeline
+│       │   ├── sesion.py                 # Estado de una corrida (Sesion) y operaciones del pipeline
+│       │   ├── persistencia_sesion.py    # Conversión Sesion ⇄ datos del formato .combos y reconstrucción validada
+│       │   ├── generador.py              # Generación de combinaciones de carga
+│       │   ├── duplicados.py             # Detección y marcado de combinaciones duplicadas
+│       │   ├── envolventes.py            # Generación de envolventes
+│       │   ├── preponderancia.py         # Análisis de preponderancia y marcado de combinaciones superadas
+│       │   ├── formateador.py            # Formateo de combinaciones para su presentación en pantalla
+│       │   ├── lector_yaml.py            # Lectura y validación de reglamentos YAML
+│       │   ├── parametros.py             # Resolución de parámetros del reglamento a factores numéricos
+│       │   └── lector_plantilla.py       # Validación de los estados de carga ingresados por el usuario
+│       ├── infraestructura/
+│       │   ├── config_interna.py         # Configuración interna embebida de plantilla y resumen
+│       │   ├── estilos_excel.py          # Estilos visuales aplicados a los archivos Excel generados
+│       │   ├── sanitizacion_excel.py     # Neutralización de texto libre antes de escribirlo en Excel
+│       │   ├── encabezado_excel.py       # Bloque de encabezado compartido por resumen y plantilla
+│       │   ├── guardado_excel.py         # Guardado atómico de los archivos Excel generados
+│       │   ├── archivo_combos.py         # Lectura y escritura atómica de archivos de sesión .combos
+│       │   ├── exportador.py             # Generación del archivo Excel de salida
+│       │   ├── generador_plantilla.py    # Generación de la planilla Excel en blanco para el usuario
+│       │   ├── lector_excel.py           # Lectura de la planilla Excel completada por el usuario
+│       │   └── rutas.py                  # Resolución de rutas del sistema de archivos (desarrollo y portable)
+│       ├── profiles/                     # Reglamentos oficiales empaquetados con la app
+│       │   ├── ejemplo_reglamento.yaml          # Plantilla comentada para crear un reglamento nuevo
+│       │   ├── cirsoc2005.yaml                  # Reglamento CIRSOC-2005 (Argentina)
+│       │   ├── cirsoc2005_actualizado.yaml      # CIRSOC-2005 con factor de sobrecarga L parametrizado según destino
+│       │   └── cirsoc2005_reducido.yaml         # Reglamento CIRSOC-2005 (Argentina) con tipos de cargas más usados
+│       └── exportadores/                 # Perfiles de exportación empaquetados
+│           ├── por_combinacion.yaml      # Layout "una fila por combinación"
+│           ├── por_componente.yaml       # Layout "una fila por componente"
+│           └── sap2000.yaml              # Exportador para SAP2000
 ├── tests/                        # Tests unitarios (pytest) de la lógica de dominio
 │   └── dominio/
-├── docs/                         # Documentación general para readme.txt
+├── docs/                         # Documentación
+│   ├── DECISIONS.md              # Registro de decisiones de arquitectura (ADR liviano)
 │   ├── diagrama_flujo.svg
 │   ├── planilla_input.png
 │   ├── planilla_output_resumen.png
 │   ├── planilla_output_resumen_completo.png
 │   ├── planilla_output_sap2000.png
 │   └── planilla_output_sap2000_completo.png
-├── profiles/
-│   ├── ejemplo_reglamento.yaml          # Plantilla comentada para crear un reglamento nuevo
-│   ├── cirsoc2005.yaml                  # Reglamento CIRSOC-2005 (Argentina)
-│   ├── cirsoc2005_actualizado.yaml      # CIRSOC-2005 con factor de sobrecarga L parametrizado según destino
-│   └── cirsoc2005_reducido.yaml         # Reglamento CIRSOC-2005 (Argentina) con tipos de cargas más usados
-├── exportadores/
-│   ├── por_combinacion.yaml      # Ejemplo de exportador con layout "una fila por combinación"
-│   ├── por_componente.yaml       # Ejemplo de exportador con layout "una fila por componente"
-│   └── sap2000.yaml              # Exportador para SAP2000
 │
-└── (documentación)
+└── (documentación en raíz)
     ├── README.md                 # Documentación principal del proyecto
     ├── CHANGELOG.md              # Historial de cambios por versión
+    ├── ROADMAP.md                # Mejoras diferidas con su condición de activación
     ├── CONTRIBUTING.md           # Guía para reportar bugs y enviar contribuciones
     ├── KNOWN_ISSUES.md           # Limitaciones conocidas y comportamiento esperado en casos borde
     ├── AUTHORS.md                # Autores y colaboradores del proyecto
@@ -369,7 +375,7 @@ combos/
 
 ## Agregar un reglamento propio
 
-Creá un archivo `.yaml` en la carpeta `profiles/`. COMBOS lo detecta automáticamente al iniciar. Tomá como referencia `profiles/ejemplo_reglamento.yaml`, que incluye todos los campos comentados. La estructura mínima es:
+Creá un archivo `.yaml` en la carpeta de perfiles del paquete: `src/combos/profiles/` desde el código fuente. COMBOS lo detecta automáticamente al iniciar. Tomá como referencia `src/combos/profiles/ejemplo_reglamento.yaml`, que incluye todos los campos comentados. La estructura mínima es:
 
 ```yaml
 metadata:
@@ -495,18 +501,18 @@ Reglas de la sección `parameters`:
 - Cada parámetro necesita `name`, al menos dos `options` (cada una con `label` y `value` mayor que cero) y un `default` igual al `value` de alguna opción.
 - Toda referencia `{ param: X }` debe apuntar a un parámetro definido, y todo parámetro definido debe ser usado por al menos una combinación.
 
-El perfil `profiles/cirsoc2005_actualizado.yaml` es un caso real: aplica la excepción del CIRSOC 2005 que permite reducir el factor de L de 1.0 a 0.5 en las combinaciones U3 a U5 del ELU según el destino del edificio.
+El perfil `src/combos/profiles/cirsoc2005_actualizado.yaml` es un caso real: aplica la excepción del CIRSOC 2005 que permite reducir el factor de L de 1.0 a 0.5 en las combinaciones U3 a U5 del ELU según el destino del edificio.
 
 ---
 
 ## Agregar un exportador propio
 
-Creá un archivo `.yaml` en la carpeta `exportadores/`. COMBOS lo detecta automáticamente al exportar. El exportador define el formato del archivo Excel de salida y soporta dos layouts:
+Creá un archivo `.yaml` en la carpeta de exportadores del paquete: `src/combos/exportadores/` desde el código fuente. COMBOS lo detecta automáticamente al exportar. El exportador define el formato del archivo Excel de salida y soporta dos layouts:
 
 - **`por_componente`** — una fila por cada componente de cada combinación. Formato requerido por SAP2000 y la mayoría de los softwares de cálculo estructural.
 - **`por_combinacion`** — una fila por combinación, con una columna por cada estado de carga. Útil para revisión manual o para softwares con ese formato de importación.
 
-Tomá como referencia `exportadores/por_combinacion.yaml` o `exportadores/por_componente.yaml`, que incluyen todos los campos disponibles con sus comentarios explicativos.
+Tomá como referencia `src/combos/exportadores/por_combinacion.yaml` o `src/combos/exportadores/por_componente.yaml`, que incluyen todos los campos disponibles con sus comentarios explicativos.
 
 ---
 

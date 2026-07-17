@@ -2,7 +2,7 @@ import os
 
 import openpyxl
 
-from dominio.modelos import EstadoCrudo
+from combos.dominio.modelos import EstadoCrudo
 
 
 class ErrorArchivoExcel(Exception):

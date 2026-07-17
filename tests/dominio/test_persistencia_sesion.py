@@ -4,17 +4,17 @@ import json
 
 import pytest
 
-from dominio.lector_plantilla import leer_plantilla
-from dominio.lector_yaml import leer_reglamento_desde_texto
-from dominio.modelos import EstadoCrudo
-from dominio.parametros import crear_eleccion, resolver_parametros
-from dominio.persistencia_sesion import (
+from combos.dominio.lector_plantilla import leer_plantilla
+from combos.dominio.lector_yaml import leer_reglamento_desde_texto
+from combos.dominio.modelos import EstadoCrudo
+from combos.dominio.parametros import crear_eleccion, resolver_parametros
+from combos.dominio.persistencia_sesion import (
     VERSION_ESQUEMA,
     ErrorSesionInvalida,
     sesion_a_datos,
     sesion_desde_datos,
 )
-from dominio.sesion import (
+from combos.dominio.sesion import (
     Sesion,
     aplicar_descartes,
     combinaciones_superadas,
@@ -381,7 +381,7 @@ def test_un_solo_descarte_huerfano_avisa_en_singular(datos_validos):
 def test_sesion_que_excede_el_limite_de_combinaciones_lanza_error(
     datos_validos, monkeypatch
 ):
-    import dominio.sesion as modulo_sesion
+    import combos.dominio.sesion as modulo_sesion
     monkeypatch.setattr(modulo_sesion, "LIMITE_COMBINACIONES", 1)
 
     with pytest.raises(
