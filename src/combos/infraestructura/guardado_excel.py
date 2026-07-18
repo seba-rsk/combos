@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
 
 
@@ -12,10 +13,15 @@ def guardar_excel_atomico(libro, ruta_destino: str) -> None:
 
     Evita que una interrupción a mitad de escritura (corte de energía,
     disco lleno) corrompa o trunque el archivo de destino, o pierda la
-    versión anterior sin poder recuperarla.
+    versión anterior sin poder recuperarla. El nombre del temporal
+    lleva un sufijo aleatorio: en un directorio compartido, un nombre
+    predecible habilitaría a otro proceso a plantar un symlink en esa
+    ruta entre la escritura y el renombre.
     """
     ruta = Path(ruta_destino)
-    ruta_temporal = ruta.with_name(f".{ruta.name}.tmp")
+    ruta_temporal = ruta.with_name(
+        f".{ruta.name}.{secrets.token_hex(8)}.tmp"
+    )
     try:
         libro.save(ruta_temporal)
         os.replace(ruta_temporal, ruta)

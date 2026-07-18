@@ -1,19 +1,26 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-# DESACTUALIZADO desde la migración a Nivel 3 (2026-07-17): las rutas
-# "main.py", "profiles" y "exportadores" ya no existen en la raíz del
-# repo. El código vive ahora en src/combos/. Este .spec se rehace desde
-# cero como parte del ítem 4B del plan post-v1.1.0 (decisiones de
-# instalación: instalador, empaquetador y destino). Hasta entonces
-# `pyinstaller combos.spec` va a fallar — es esperable.
+# Empaquetado de COMBOS con PyInstaller en modo onedir (decisión del
+# ítem 4B del plan post-v1.1.0). Se construye con:
+#
+#   pyinstaller combos.spec
+#
+# El resultado queda en dist/COMBOS/ y es la entrada del instalador
+# (installer/combos.iss). Los perfiles de reglamento y de exportación
+# viajan como datos del bundle: en ejecución se resuelven vía
+# sys._MEIPASS (ver src/combos/infraestructura/rutas.py).
+#
+# UPX queda desactivado a propósito: la compresión de binarios dispara
+# falsos positivos frecuentes en antivirus, y el instalador ya comprime
+# todo con LZMA2.
 
 a = Analysis(
-    ["main.py"],
-    pathex=[],
+    ["src/combos/__main__.py"],
+    pathex=["src"],
     binaries=[],
     datas=[
-        ("profiles", "profiles"),
-        ("exportadores", "exportadores"),
+        ("src/combos/profiles/*.yaml", "profiles"),
+        ("src/combos/exportadores/*.yaml", "exportadores"),
     ],
     hiddenimports=[],
     hookspath=[],
@@ -34,7 +41,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -50,7 +57,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name="COMBOS",
 )

@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from combos.dominio.modelos import Estado, EstadoCrudo
 
+# Tope de estados de carga por corrida. El uso real está en el orden de
+# las decenas; el límite corta una entrada desmedida (una planilla
+# propia o un archivo .combos de terceros) antes de enriquecerla y
+# combinarla. Hallazgo de la auditoría 2026-07-18.
+LIMITE_ESTADOS = 500
+
 
 class ErrorValidacionPlantilla(Exception):
     def __init__(self, errores: list[str]) -> None:
@@ -24,15 +30,22 @@ def leer_plantilla(
             dominio.lector_yaml.leer_reglamento).
 
     Raises:
-        ErrorValidacionPlantilla: Si hay tipos de carga no definidos en el
-            reglamento, grupos direccionales con menos de dos estados, o
-            nombres de estado duplicados.
+        ErrorValidacionPlantilla: Si hay más estados que LIMITE_ESTADOS,
+            tipos de carga no definidos en el reglamento, grupos
+            direccionales con menos de dos estados, o nombres de estado
+            duplicados.
 
     Returns:
         Lista de estados enriquecidos, con una fila por cada variante de
         signo (los estados direccionales con "incluir opuesto" generan
         dos filas).
     """
+    if len(estados) > LIMITE_ESTADOS:
+        raise ErrorValidacionPlantilla([
+            f"La planilla tiene {len(estados)} estados de carga y el "
+            f"máximo que COMBOS procesa es {LIMITE_ESTADOS}. Revisá que "
+            f"el archivo sea el correcto."
+        ])
     estados_enriquecidos = _construir_estados_enriquecidos(estados)
     errores = _recolectar_errores_de_validacion(
         estados, estados_enriquecidos, reglamento

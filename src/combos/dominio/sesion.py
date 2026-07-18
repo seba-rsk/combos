@@ -33,18 +33,47 @@ from combos.dominio.preponderancia import marcar_superadas
 # los cientos; el límite deja margen de sobra.
 LIMITE_COMBINACIONES = 10_000
 
+# Tope del total de términos (componentes) que una corrida puede
+# generar: combinaciones × estados que participan. Acota la memoria en
+# el caso que el tope de combinaciones no cubre — muchas combinaciones
+# chicas de un reglamento desmedido, cada una arrastrando una lista
+# enorme de estados. Hallazgo de la auditoría 2026-07-18.
+LIMITE_COMPONENTES = 1_000_000
+
 
 class ErrorLimiteCombinaciones(Exception):
     """La entrada genera más combinaciones de las que COMBOS procesa."""
 
     def __init__(self, cantidad: int) -> None:
         self.cantidad = cantidad
-        super().__init__(
+        super().__init__(self._mensaje(cantidad))
+
+    @staticmethod
+    def _mensaje(cantidad: int) -> str:
+        return (
             f"La entrada genera {_formato_miles(cantidad)} combinaciones "
             f"y el máximo que COMBOS procesa es "
             f"{_formato_miles(LIMITE_COMBINACIONES)}. Revisá la cantidad "
             f"de estados direccionales y de grupos: las variantes se "
             f"multiplican entre sí."
+        )
+
+
+class ErrorLimiteComponentes(ErrorLimiteCombinaciones):
+    """
+    La entrada genera más términos de combinación de los que COMBOS
+    procesa. Hereda de ErrorLimiteCombinaciones para que toda interfaz
+    que ya maneja aquel tope maneje también este sin cambios.
+    """
+
+    @staticmethod
+    def _mensaje(cantidad: int) -> str:
+        return (
+            f"La entrada genera alrededor de {_formato_miles(cantidad)} "
+            f"términos de combinación y el máximo que COMBOS procesa es "
+            f"{_formato_miles(LIMITE_COMPONENTES)}. Revisá la cantidad "
+            f"de estados de la planilla y de combinaciones del "
+            f"reglamento."
         )
 
 
@@ -91,9 +120,10 @@ def procesar(sesion: Sesion) -> None:
     Raises:
         ValueError: Si la sesión no tiene reglamento cargado.
         ErrorLimiteCombinaciones: Si la entrada generaría más
-            combinaciones que LIMITE_COMBINACIONES (el chequeo corre
-            antes de generar nada, así una entrada desmedida no llega
-            a consumir memoria ni tiempo).
+            combinaciones que LIMITE_COMBINACIONES, o más términos en
+            total que LIMITE_COMPONENTES (los chequeos corren antes de
+            generar nada, así una entrada desmedida no llega a consumir
+            memoria ni tiempo).
     """
     if sesion.reglamento is None:
         raise ValueError(
@@ -104,6 +134,9 @@ def procesar(sesion: Sesion) -> None:
     )
     if cantidad_prevista > LIMITE_COMBINACIONES:
         raise ErrorLimiteCombinaciones(cantidad_prevista)
+    terminos_previstos = cantidad_prevista * len(sesion.estados)
+    if terminos_previstos > LIMITE_COMPONENTES:
+        raise ErrorLimiteComponentes(terminos_previstos)
     combinaciones = generar_combinaciones(sesion.estados, sesion.reglamento)
     combinaciones = marcar_duplicadas(combinaciones)
     combinaciones = marcar_superadas(

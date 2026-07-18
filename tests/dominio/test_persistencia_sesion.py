@@ -396,3 +396,18 @@ def test_reglamento_embebido_con_alias_yaml_lanza_error(datos_validos):
     )
     with pytest.raises(ErrorSesionInvalida, match="alias"):
         sesion_desde_datos(datos_validos)
+
+
+def test_reglamento_embebido_desmedido_lanza_error(
+    datos_validos, monkeypatch
+):
+    """
+    El reglamento embebido en una sesión tiene el mismo tope de tamaño
+    que un YAML leído de disco; sin él, solo lo acotaba el tope global
+    del archivo .combos, mucho mayor.
+    """
+    import combos.dominio.persistencia_sesion as modulo
+    monkeypatch.setattr(modulo, "MAX_BYTES_YAML", 10)
+
+    with pytest.raises(ErrorSesionInvalida, match="tamaño máximo"):
+        sesion_desde_datos(datos_validos)

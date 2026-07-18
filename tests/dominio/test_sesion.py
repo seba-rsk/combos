@@ -214,3 +214,35 @@ def test_procesar_rechaza_entradas_desmedidas(
 
     assert info.value.cantidad == 4
     assert sesion_lista_para_procesar.combinaciones == []
+
+
+def test_procesar_rechaza_exceso_de_terminos_totales(
+    sesion_lista_para_procesar, monkeypatch
+):
+    """
+    El tope de términos cubre el caso que el tope de combinaciones no
+    cubre: pocas combinaciones pero cada una arrastrando una lista
+    enorme de estados. También debe cortar antes de generar.
+    """
+    import combos.dominio.sesion as modulo_sesion
+    monkeypatch.setattr(modulo_sesion, "LIMITE_COMPONENTES", 1)
+
+    with pytest.raises(
+        modulo_sesion.ErrorLimiteComponentes, match="términos"
+    ):
+        procesar(sesion_lista_para_procesar)
+
+    assert sesion_lista_para_procesar.combinaciones == []
+
+
+def test_error_de_terminos_se_maneja_como_error_de_limite(monkeypatch):
+    """
+    Toda interfaz que ya captura ErrorLimiteCombinaciones debe capturar
+    también el tope de términos sin cambios (es su subclase).
+    """
+    import combos.dominio.sesion as modulo_sesion
+
+    error = modulo_sesion.ErrorLimiteComponentes(99)
+
+    assert isinstance(error, modulo_sesion.ErrorLimiteCombinaciones)
+    assert error.cantidad == 99

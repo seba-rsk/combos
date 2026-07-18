@@ -25,6 +25,9 @@ dev = [
     "bandit>=1.9.4",
     "pip-audit>=2.10.1",
 ]
+build = [
+    "pyinstaller>=6.10",
+]
 
 [project.urls]
 Homepage = "https://github.com/seba-rsk/combos"

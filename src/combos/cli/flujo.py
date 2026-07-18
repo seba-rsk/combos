@@ -39,7 +39,6 @@ from combos.cli.constantes import (
     EXTENSION_EXCEL,
     EXTENSION_YAML,
     FORMATO_FECHA_ARCHIVO,
-    FORMATO_TIMESTAMP_LOG,
     NOMBRE_CARPETA_ESCRITORIO,
     PREFIJO_EXPORTACION,
     PREFIJO_PLANTILLA,
@@ -98,6 +97,7 @@ from combos.infraestructura.lector_excel import (
     ErrorFormatoPlantilla,
     leer_excel,
 )
+from combos.infraestructura.log_errores import anexar_entrada_log
 from combos.infraestructura.rutas import (
     RUTA_EXPORTADORES,
     RUTA_LOG,
@@ -107,17 +107,28 @@ from combos.version import VERSION
 
 # ── Punto de entrada ──────────────────────────────────────────────────────────
 
-def ejecutar_flujo() -> None:
+def ejecutar_flujo(ruta_combos: str | None = None) -> None:
     """
     Orquesta el flujo completo de COMBOS sobre una única Sesion:
     inicio (sesión nueva o abrir un `.combos`) → reglamento → plantilla
     → lectura y validación de estados → parámetros → procesamiento →
     superadas → resumen → exportación → guardado opcional de la sesión.
     Cada paso completa la sesión; la lógica vive en dominio.
+
+    Args:
+        ruta_combos: Ruta de una sesión `.combos` recibida como
+            argumento del programa (doble click sobre un archivo
+            asociado, o invocación manual). Si se puede abrir, el flujo
+            salta el menú de inicio; si no, informa el problema y sigue
+            con el menú normal.
     """
     mostrar_bienvenida(VERSION)
 
-    sesion = _paso_inicio()
+    sesion = None
+    if ruta_combos is not None:
+        sesion = _abrir_sesion_desde_argumento(ruta_combos)
+    if sesion is None:
+        sesion = _paso_inicio()
 
     if sesion is None:
         sesion = Sesion()
@@ -177,16 +188,49 @@ def _pedir_opcion_inicio() -> int:
         )
 
 
+def _abrir_sesion_desde_argumento(ruta_texto: str) -> Sesion | None:
+    """
+    Abre la sesión `.combos` recibida como argumento del programa. Si
+    la ruta no sirve (extensión ajena, archivo inexistente o dañado),
+    informa qué pasó y devuelve None: el flujo sigue con el menú de
+    inicio normal.
+    """
+    ruta = Path(ruta_texto)
+    if ruta.suffix.lower() != EXTENSION_COMBOS:
+        mostrar_advertencia(
+            f"El archivo indicado no es una sesión de COMBOS: "
+            f"'{escape(ruta.name)}'. COMBOS abre archivos "
+            f"{EXTENSION_COMBOS}; seguí desde el menú de inicio."
+        )
+        return None
+    if not ruta.exists():
+        mostrar_advertencia(
+            f"No se encontró el archivo: '{escape(str(ruta))}'. "
+            "Seguí desde el menú de inicio."
+        )
+        return None
+    return _abrir_sesion_en_ruta(ruta)
+
+
 def _abrir_sesion_guardada() -> Sesion | None:
     """
-    Pide el archivo `.combos`, lo lee y reconstruye la sesión completa
-    (reglamento re-validado, combinaciones regeneradas, descartes
-    reaplicados). Devuelve None si el usuario cancela o el archivo no
-    se puede abrir; el llamador vuelve al menú de inicio.
+    Pide el archivo `.combos` y lo abre. Devuelve None si el usuario
+    cancela o el archivo no se puede abrir; el llamador vuelve al menú
+    de inicio.
     """
     ruta = _pedir_ruta_combos_guardado()
     if ruta is None:
         return None
+    return _abrir_sesion_en_ruta(ruta)
+
+
+def _abrir_sesion_en_ruta(ruta: Path) -> Sesion | None:
+    """
+    Lee el archivo `.combos` y reconstruye la sesión completa
+    (reglamento re-validado, combinaciones regeneradas, descartes
+    reaplicados). Devuelve None si el archivo no se puede abrir,
+    después de informar el problema.
+    """
     mostrar_procesando(f"Abriendo sesión: {ruta.name} ...")
     try:
         datos = leer_combos(str(ruta))
@@ -229,6 +273,13 @@ def _pedir_ruta_combos_guardado() -> Path | None:
         if not entrada:
             return None
         ruta = Path(entrada)
+        if ruta.suffix.lower() != EXTENSION_COMBOS:
+            mostrar_advertencia(
+                f"El archivo indicado no es una sesión de COMBOS: "
+                f"'{escape(ruta.name)}'. Ingresá una ruta con "
+                f"extensión {EXTENSION_COMBOS}."
+            )
+            continue
         if not ruta.exists():
             mostrar_advertencia(
                 f"No se encontró el archivo: '{escape(str(ruta))}'"
@@ -872,18 +923,12 @@ def _loguear_fallo_dialogo() -> None:
     no se puede escribir (carpeta de solo lectura), el registro se
     pierde en silencio: el usuario ya sigue interactuando por teclado.
     """
-    timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
-    try:
-        with open(RUTA_LOG, "a", encoding="utf-8") as f:
-            f.write(f"\n{'=' * 60}\n")
-            f.write(
-                f"  COMBOS v{VERSION}  —  {timestamp}  —  falló el diálogo de "
-                "selección de archivo, se pidió la ruta por teclado\n"
-            )
-            f.write(f"{'=' * 60}\n")
-            f.write(traceback.format_exc())
-    except OSError:
-        pass
+    anexar_entrada_log(
+        RUTA_LOG,
+        "falló el diálogo de selección de archivo, se pidió la ruta "
+        "por teclado",
+        traceback.format_exc(),
+    )
 
 
 def _loguear_error_tecnico(contexto: str, error: BaseException) -> None:
@@ -895,15 +940,8 @@ def _loguear_error_tecnico(contexto: str, error: BaseException) -> None:
     registro se pierde en silencio: el mensaje amable ya llegó al
     usuario.
     """
-    timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
-    try:
-        with open(RUTA_LOG, "a", encoding="utf-8") as f:
-            f.write(f"\n{'=' * 60}\n")
-            f.write(
-                f"  COMBOS v{VERSION}  —  {timestamp}  —  error técnico "
-                f"durante {contexto}\n"
-            )
-            f.write(f"{'=' * 60}\n")
-            f.write(f"  {type(error).__name__}: {error}\n")
-    except OSError:
-        pass
+    anexar_entrada_log(
+        RUTA_LOG,
+        f"error técnico durante {contexto}",
+        f"  {type(error).__name__}: {error}",
+    )

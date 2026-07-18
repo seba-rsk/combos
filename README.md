@@ -45,16 +45,15 @@ COMBOS lee un reglamento de cargas desde un archivo YAML, procesa una planilla E
 - Generación de envolventes por estado límite incluida en la exportación.
 - Compatible con SAP2000. Extensible a otros softwares mediante archivos YAML de exportación.
 - Reglamentos intercambiables: incluye CIRSOC 2005 y soporte para agregar los propios.
-- Sesiones guardables: el trabajo se guarda como archivo `.combos` (JSON) y se retoma después con las combinaciones regeneradas y las decisiones intactas.
-- Interfaz de línea de comandos guiada paso a paso. Funciona en Windows sin instalación adicional.
+- Sesiones guardables: el trabajo se guarda como archivo `.combos` (JSON) y se retoma después con las combinaciones regeneradas y las decisiones intactas. El doble click sobre un `.combos` abre COMBOS con esa sesión ya cargada.
+- Interfaz de línea de comandos guiada paso a paso, con instalador para Windows que no requiere permisos de administrador.
 
 ---
 
 ## Requisitos
 
 - Windows 10 o superior (64 bits).
-- La carpeta de instalación debe mantenerse completa e intacta. No muevas ni elimines ningún archivo o subcarpeta interna.
-- No requiere Python instalado (la versión portable incluye todo lo necesario).
+- No requiere Python instalado ni permisos de administrador.
 
 Para correr desde el código fuente:
 
@@ -65,20 +64,15 @@ Para correr desde el código fuente:
 
 ## Instalación
 
-### Versión portable (recomendada)
+### Instalador para Windows (recomendado)
 
-1. Descargá la última versión desde [Releases](https://github.com/seba-rsk/combos/releases).
-2. Descomprimí el archivo `.zip` en la ubicación que prefieras (por ejemplo `C:\COMBOS\`).
-3. **No muevas ni elimines ningún archivo o subcarpeta** dentro de la carpeta descomprimida. El programa necesita todos los archivos para funcionar.
-4. Para ejecutar COMBOS, abrí una terminal (CMD o PowerShell), navegá hasta la carpeta y ejecutá:
+1. Descargá `COMBOS_x.y.z_instalador.exe` desde [Releases](https://github.com/seba-rsk/combos/releases).
+2. Ejecutalo y seguí los pasos. No pide permisos de administrador: instala solo para tu usuario, en `%LOCALAPPDATA%\Programs\COMBOS`.
+3. Al terminar tenés COMBOS en el menú de inicio, y los archivos de sesión `.combos` quedan asociados al programa: el doble click sobre uno lo abre con esa sesión ya cargada.
 
-```cmd
-.\COMBOS.exe
-```
+Para desinstalar: **Configuración → Aplicaciones** (o "Agregar o quitar programas"), como cualquier programa de Windows.
 
-> **Nota:** Si hacés doble clic en `COMBOS.exe` directamente, la ventana se cerrará al presionar Enter al finalizar la sesión. Para una experiencia más cómoda, ejecutá desde una terminal abierta (CMD o PowerShell).
-
-No requiere instalación. Para desinstalar, borrá la carpeta.
+> **Nota:** Si abrís COMBOS con doble clic, la ventana se cierra al terminar la sesión (después de presionar Enter). Para que quede abierta, ejecutalo desde una terminal (CMD o PowerShell).
 
 ### Desde el código fuente
 
@@ -89,7 +83,25 @@ pip install -e .
 combos
 ```
 
-Alternativamente: `python -m combos`.
+Alternativamente: `python -m combos`. Para abrir una sesión guardada directamente: `combos ruta\al\archivo.combos`.
+
+### Construir el ejecutable y el instalador (desarrollo)
+
+Requiere el extra `build` y [Inno Setup 6](https://jrsoftware.org/isinfo.php) instalado (herramienta externa, solo para compilar el instalador):
+
+```bash
+pip install -e ".[build]"
+pyinstaller combos.spec
+iscc installer\combos.iss
+```
+
+El primer comando genera la app en `dist\COMBOS\`; el segundo produce el instalador en `dist\instalador\`. La versión del instalador se define en `installer/combos.iss` (`MyAppVersion`) y debe coincidir con la del `pyproject.toml`.
+
+Antes de publicar un release, calculá el hash SHA-256 del instalador y pegalo en las notas del release, así cualquiera puede verificar que su descarga es auténtica:
+
+```powershell
+Get-FileHash dist\instalador\*.exe -Algorithm SHA256
+```
 
 ---
 
@@ -102,6 +114,8 @@ COMBOS guía al usuario paso a paso a través de la interfaz de línea de comand
 **Paso 0 — Inicio: sesión nueva o abrir una guardada**
 
 COMBOS pregunta si querés empezar una sesión nueva (Enter) o abrir una sesión guardada previamente como archivo `.combos`. Al abrir una sesión guardada se restauran el reglamento, los estados de carga, las elecciones de parámetros y los descartes tal como quedaron, las combinaciones se regeneran, y el flujo salta directo al resumen (paso 7) para exportar.
+
+Este paso se saltea si abriste COMBOS con doble click sobre un archivo `.combos` (o pasando su ruta como argumento): esa sesión se abre directamente.
 
 **Paso 1 — Selección del reglamento**
 
@@ -308,6 +322,9 @@ Los reglamentos organizan las combinaciones en estados límite. El más común e
 combos/
 ├── pyproject.toml                # Configuración del proyecto y dependencias
 ├── combos.ico                    # Icono del programa
+├── combos.spec                   # Empaquetado con PyInstaller (genera dist/COMBOS/)
+├── installer/
+│   └── combos.iss                # Script del instalador para Windows (Inno Setup 6)
 ├── src/
 │   └── combos/                   # Paquete instalable
 │       ├── __main__.py           # Habilita `python -m combos`
@@ -339,7 +356,8 @@ combos/
 │       │   ├── exportador.py             # Generación del archivo Excel de salida
 │       │   ├── generador_plantilla.py    # Generación de la planilla Excel en blanco para el usuario
 │       │   ├── lector_excel.py           # Lectura de la planilla Excel completada por el usuario
-│       │   └── rutas.py                  # Resolución de rutas del sistema de archivos (desarrollo y portable)
+│       │   ├── log_errores.py            # Escritura del log técnico de errores (saneo y tope de tamaño)
+│       │   └── rutas.py                  # Resolución de rutas del sistema de archivos (desarrollo e instalado)
 │       ├── profiles/                     # Reglamentos oficiales empaquetados con la app
 │       │   ├── ejemplo_reglamento.yaml          # Plantilla comentada para crear un reglamento nuevo
 │       │   ├── cirsoc2005.yaml                  # Reglamento CIRSOC-2005 (Argentina)
@@ -349,8 +367,9 @@ combos/
 │           ├── por_combinacion.yaml      # Layout "una fila por combinación"
 │           ├── por_componente.yaml       # Layout "una fila por componente"
 │           └── sap2000.yaml              # Exportador para SAP2000
-├── tests/                        # Tests unitarios (pytest) de la lógica de dominio
-│   └── dominio/
+├── tests/                        # Tests (pytest)
+│   ├── dominio/                  # Unitarios de la lógica de dominio
+│   └── infraestructura/          # Unitarios del log de errores
 ├── docs/                         # Documentación
 │   ├── DECISIONS.md              # Registro de decisiones de arquitectura (ADR liviano)
 │   ├── diagrama_flujo.svg
@@ -366,7 +385,6 @@ combos/
     ├── ROADMAP.md                # Mejoras diferidas con su condición de activación
     ├── CONTRIBUTING.md           # Guía para reportar bugs y enviar contribuciones
     ├── KNOWN_ISSUES.md           # Limitaciones conocidas y comportamiento esperado en casos borde
-    ├── AUTHORS.md                # Autores y colaboradores del proyecto
     ├── LICENSE                   # Licencia de uso del software
     └── .gitignore
 ```
@@ -534,13 +552,13 @@ El archivo de sesión se editó a mano, se cortó al copiarse o no fue generado 
 El archivo `.combos` fue creado por una versión de COMBOS más reciente que la tuya. Actualizá COMBOS para abrirlo.
 
 **El software falla con un error inesperado**
-COMBOS genera automáticamente un archivo de log en la carpeta de instalación. Enviá ese archivo al reportar el problema.
+COMBOS genera automáticamente un archivo de log con el detalle. Si usás la versión instalada, está en `%LOCALAPPDATA%\COMBOS\combos_error.log` (pegá esa ruta en el explorador de Windows); si corrés desde el código fuente, en la raíz del repositorio (`combos_error.log`). Enviá ese archivo al reportar el problema.
 
 **La ventana se cierra al terminar**
 Es el comportamiento normal al ejecutar desde doble clic. Ejecutá COMBOS desde una terminal (CMD o PowerShell) para que la ventana permanezca abierta.
 
 **"Failed to load Python DLL"**
-La carpeta de instalación está incompleta. Asegurate de haber descomprimido el `.zip` completo sin mover ni eliminar ningún archivo interno.
+La instalación está incompleta o dañada. Volvé a ejecutar el instalador desde [Releases](https://github.com/seba-rsk/combos/releases) para repararla.
 
 ---
 
@@ -555,7 +573,7 @@ COMBOS automatiza la generación y filtrado de combinaciones, pero hay decisione
 - No tiene editor visual de archivos YAML. Los reglamentos y exportadores se crean y editan manualmente con cualquier editor de texto.
 - No soporta estados con dependencias entre sí (por ejemplo, estados que solo pueden coexistir con otros estados específicos).
 - No tiene interfaz gráfica. Opera exclusivamente desde la línea de comandos.
-- Solo genera el ejecutable portable para Windows. Linux y macOS requieren correr el software desde el código fuente.
+- El instalador está disponible solo para Windows. Linux y macOS requieren correr el software desde el código fuente.
 
 ---
 

@@ -22,7 +22,11 @@ from combos.dominio.lector_plantilla import (
     ErrorValidacionPlantilla,
     leer_plantilla,
 )
-from combos.dominio.lector_yaml import es_numero, leer_reglamento_desde_texto
+from combos.dominio.lector_yaml import (
+    MAX_BYTES_YAML,
+    es_numero,
+    leer_reglamento_desde_texto,
+)
 from combos.dominio.modelos import EleccionParametro, Estado, EstadoCrudo
 from combos.dominio.parametros import (
     crear_eleccion,
@@ -199,6 +203,16 @@ def _validar_version_de_esquema(version) -> None:
 def _validar_reglamento_embebido(texto: str, nombre_perfil: str) -> dict:
     if not texto.strip():
         raise ErrorSesionInvalida(MENSAJE_ARCHIVO_DANADO)
+    if len(texto.encode("utf-8")) > MAX_BYTES_YAML:
+        # El mismo tope que rige para un YAML leído de disco: sin él,
+        # el reglamento embebido solo estaba acotado por el tamaño
+        # total del archivo .combos, mucho mayor.
+        raise ErrorSesionInvalida(
+            f"el reglamento guardado dentro de la sesión supera el "
+            f"tamaño máximo admitido "
+            f"({MAX_BYTES_YAML // (1024 * 1024)} MB). "
+            f"{MENSAJE_ARCHIVO_DANADO}"
+        )
     try:
         return leer_reglamento_desde_texto(texto, nombre_perfil)
     except ValueError as error:

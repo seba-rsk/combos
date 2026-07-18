@@ -34,6 +34,3 @@ PAUSA_SEPARADOR_SEGUNDOS = 0.3
 # Largo de la línea que acompaña al encabezado de cada estado límite en
 # las tablas de consola (Resumen, Combinaciones superadas).
 ANCHO_SEPARADOR_ESTADO = 60
-
-# Formato de fecha y hora de las entradas del log de errores.
-FORMATO_TIMESTAMP_LOG = "%Y-%m-%d %H:%M:%S"

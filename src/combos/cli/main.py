@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import sys
 import traceback
-from datetime import datetime
 
-from combos.cli.constantes import FORMATO_TIMESTAMP_LOG
+from combos.infraestructura.log_errores import anexar_entrada_log
 from combos.infraestructura.rutas import RUTA_LOG
-from combos.version import VERSION
 
 
 def main() -> None:
@@ -14,10 +12,15 @@ def main() -> None:
     Punto de entrada de COMBOS: ejecuta el flujo completo y convierte
     cualquier error inesperado en un mensaje amable más un informe en el
     log, sin exponer detalles técnicos en pantalla.
+
+    Acepta opcionalmente la ruta de un archivo de sesión `.combos` como
+    primer argumento del programa (doble click sobre un archivo asociado
+    en Windows, o invocación manual): en ese caso el flujo abre esa
+    sesión directamente, sin pasar por el menú de inicio.
     """
     try:
         from combos.cli.flujo import ejecutar_flujo
-        ejecutar_flujo()
+        ejecutar_flujo(ruta_combos=_argumento_ruta_combos())
 
     except KeyboardInterrupt:
         from rich.console import Console
@@ -37,6 +40,17 @@ def main() -> None:
         sys.exit(1)
 
 
+def _argumento_ruta_combos() -> str | None:
+    """
+    Devuelve el primer argumento del programa (la ruta de una sesión
+    `.combos`) o None si no se pasó ninguno. La validación de la ruta,
+    con sus mensajes al usuario, vive en el flujo.
+    """
+    if len(sys.argv) > 1:
+        return sys.argv[1]
+    return None
+
+
 def _escribir_log_error() -> bool:
     """
     Intenta registrar el traceback en el log de errores. Devuelve False
@@ -44,16 +58,9 @@ def _escribir_log_error() -> bool:
     caso el error igual se informa en pantalla con el mensaje amable,
     nunca con el traceback crudo.
     """
-    timestamp = datetime.now().strftime(FORMATO_TIMESTAMP_LOG)
-    try:
-        with open(RUTA_LOG, "a", encoding="utf-8") as f:
-            f.write(f"\n{'=' * 60}\n")
-            f.write(f"  COMBOS v{VERSION}  —  {timestamp}\n")
-            f.write(f"{'=' * 60}\n")
-            f.write(traceback.format_exc())
-        return True
-    except OSError:
-        return False
+    return anexar_entrada_log(
+        RUTA_LOG, "error inesperado", traceback.format_exc()
+    )
 
 
 def _mostrar_error_fatal(log_guardado: bool) -> None:
@@ -65,8 +72,8 @@ def _mostrar_error_fatal(log_guardado: bool) -> None:
         print("  Enviá ese archivo para recibir soporte.")
     else:
         print("  No se pudo guardar el informe del error: la carpeta")
-        print("  del programa no permite escribir. Ejecutá COMBOS desde")
-        print("  una carpeta con permisos de escritura y repetí el caso.")
+        print("  del log no permite escribir. Ejecutá COMBOS con permisos")
+        print("  de escritura en tu carpeta de usuario y repetí el caso.")
     print("=" * 52)
 
 

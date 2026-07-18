@@ -31,6 +31,24 @@ def _estado_crudo_direccional(
     )
 
 
+def test_leer_plantilla_rechaza_exceso_de_estados(
+    reglamento_minimo, monkeypatch
+):
+    """
+    El tope de estados corta una entrada desmedida antes de enriquecer
+    y combinar (una planilla propia o un .combos de terceros).
+    """
+    import combos.dominio.lector_plantilla as modulo
+    monkeypatch.setattr(modulo, "LIMITE_ESTADOS", 3)
+    estados = [_estado_crudo_simple(f"E{i}", "D") for i in range(4)]
+
+    with pytest.raises(ErrorValidacionPlantilla) as info:
+        leer_plantilla(estados, reglamento_minimo)
+
+    assert "máximo" in info.value.errores[0]
+    assert "500" not in info.value.errores[0]  # usa el valor vigente
+
+
 def test_leer_plantilla_estado_simple_no_genera_variantes(reglamento_minimo):
     estados = [_estado_crudo_simple("DEAD", "D")]
 

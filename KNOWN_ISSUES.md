@@ -33,7 +33,7 @@ Esto limita la capacidad de reconstruir lo ocurrido en una sesión cuando el usu
 
 ### Planificado para v2
 
-Un log de sesión completo, uno por ejecución, guardado en la carpeta `logs/` junto al ejecutable. Cada entrada registrará timestamp, nivel y descripción de cada acción relevante del flujo.
+Un log de sesión completo, uno por ejecución, guardado en `%LOCALAPPDATA%\COMBOS\logs\` (la misma carpeta de datos locales donde ya vive el log de errores). Cada entrada registrará timestamp, nivel y descripción de cada acción relevante del flujo.
 
 ---
 

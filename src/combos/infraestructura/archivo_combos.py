@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 from pathlib import Path
 
 from combos.dominio.persistencia_sesion import MENSAJE_ARCHIVO_DANADO
@@ -62,14 +63,19 @@ def guardar_combos(datos: dict, ruta: str) -> None:
     Escribe los datos de la sesión como JSON UTF-8 en `ruta`, de forma
     atómica (archivo temporal en el mismo directorio + os.replace): una
     interrupción a mitad de escritura nunca corrompe ni trunca un
-    archivo de destino existente.
+    archivo de destino existente. El nombre del temporal lleva un
+    sufijo aleatorio, igual que en el guardado de Excel: un nombre
+    predecible habilitaría un symlink plantado en directorios
+    compartidos.
 
     Raises:
         ErrorArchivoCombos: Si no se puede escribir en el destino
             (permisos, carpeta inexistente, disco lleno).
     """
     ruta_destino = Path(ruta)
-    ruta_temporal = ruta_destino.with_name(f".{ruta_destino.name}.tmp")
+    ruta_temporal = ruta_destino.with_name(
+        f".{ruta_destino.name}.{secrets.token_hex(8)}.tmp"
+    )
     try:
         contenido = json.dumps(datos, ensure_ascii=False, indent=2)
         ruta_temporal.write_text(contenido, encoding="utf-8")
