@@ -16,7 +16,7 @@
 ; pyproject.toml en cada release.
 
 #define MyAppName "COMBOS"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "Sebastián A. Roskopf"
 #define MyAppURL "https://github.com/seba-rsk/combos"
 #define MyAppExeName "COMBOS.exe"

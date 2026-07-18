@@ -9,6 +9,12 @@ El versionado sigue [Semantic Versioning](https://semver.org/lang/es/).
 
 ## [Unreleased]
 
+(cambios en desarrollo que todavía no tienen versión asignada)
+
+---
+
+## [1.2.0] — 2026-07-18
+
 ### Agregado
 
 - **Instalador para Windows y decisiones de instalación** (Parte B del ítem 4 del plan post-v1.1.0): COMBOS se distribuye ahora con un instalador (`installer/combos.iss`, Inno Setup 6) sobre un ejecutable empaquetado con PyInstaller en modo carpeta (`combos.spec` rehecho para el layout `src/combos/`; UPX desactivado para evitar falsos positivos de antivirus). La instalación es por usuario en `%LOCALAPPDATA%\Programs\COMBOS` — sin permisos de administrador — con acceso directo en el menú de inicio, desinstalador estándar de Windows y asociación de los archivos `.combos`: el doble click abre COMBOS con esa sesión ya cargada, con `combos.ico` como icono del archivo. Para eso el programa acepta ahora la ruta de una sesión `.combos` como argumento (`combos ruta\proyecto.combos` o el ejecutable instalado); si el archivo no existe o no es un `.combos`, lo informa con mensaje claro y sigue con el menú de inicio normal. En release, el log de errores se muda de la carpeta del programa a `%LOCALAPPDATA%\COMBOS\combos_error.log` (siempre escribible, sobrevive actualizaciones); en desarrollo sigue en la raíz del repo. La escritura del log quedó centralizada en el módulo nuevo `infraestructura/log_errores.py`, con creación de la carpeta si falta y tope de tamaño de 1 MB (al superarlo se conserva la mitad más reciente — antes crecía sin límite). La política de destino de exportación queda registrada como decisión: elección libre vía diálogo del sistema con default en el Escritorio, sin whitelist de rutas (ver `docs/DECISIONS.md`). Dependencia nueva de desarrollo: `pyinstaller` (extra `build` del `pyproject.toml`); Inno Setup 6 es herramienta externa, documentada en el README. 8 tests nuevos (158 en total). Verificado con build real: el ejecutable empaquetado lista los reglamentos desde el bundle, valida el argumento y escribe el log en la ruta nueva.
